@@ -25,6 +25,7 @@
         <div>Parent Component:</div>
         <button p-on:click="count++">+</button>
         <button p-on:click="count--">-</button>
+        <input type="number" p-model="count" />
         <div p-text:trim.25="`${name} can count to: ${count}`"></div>
         <span p-show="count > 2">Greater than 2</span>
         <span p-show="count < 2">Less than 2</span>
