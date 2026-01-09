@@ -22,7 +22,7 @@
     <body>
         <h1 p-html:allow.strong.em:trim.18="title"></h1>
         <hr>
-        <div p-attr="{'data-name': name + 'woah'}">Parent Component:</div>
+        <div p-attr="{'data-name': name + 'woah'}" p-attr:number="count * 3">Parent Component:</div>
         <button p-on:click="count++">+</button>
         <button p-on:click="count--">-</button>
         <input type="number" p-model="count" />

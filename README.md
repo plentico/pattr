@@ -110,35 +110,32 @@ Both data sources are merged and available throughout your app.
 
 ### `p-attr` - Set Attributes
 
-**Multiple attributes**
+**Single attributes**
+```html
+<div 
+  p-attr:data-id="userId" 
+  p-attr:data-total="price * quantity" 
+  p-attr:data-name="firstName + ' ' + lastName"
+  p-attr:data-age="`${name} is ${age} years old`"
+  p-attr:data-status="isActive ? 'active' : 'inactive'"
+  p-attr:data-upper="userName.toUpperCase()"
+  p-attr:aria-label="ariaText"
+  p-attr:href="linkUrl"
+>
+```
+
+**Object syntax for multiple attributes**
 ```html
 <div p-attr="{ 
   'data-id': userId, 
-  'data-name': userName, 
-  'data-status': status,
+  'data-total': price * quantity,
+  'data-name': firstName + ' ' + lastName,
+  'data-age': `${name} is ${age} years old`,
+  'data-status': isActive ? 'active' : 'inactive',
+  'data-upper': userName.toUpperCase(),
   'aria-label': ariaText,
   'href': linkUrl 
 }">
-```
-
-**Attribute with expressions**
-```html
-<div p-attr="{ 'data-number': number + 5, 'data-label': 'User: ' + userName }">
-```
-
-**Attribute with template literals**
-```html
-<div p-attr="{ 'data-info': `${name} - ${age} years old` }">
-```
-
-**Attribute with ternary operator**
-```html
-<div p-attr="{ 'data-status': isActive ? 'active' : 'inactive' }">
-```
-
-**Atrribute with method call**
-```html
-<div p-attr="{ 'data-upper': userName.toUpperCase() }">
 ```
 
 ### `p-model` - Two-Way Data Binding
