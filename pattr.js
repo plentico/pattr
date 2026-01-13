@@ -225,7 +225,9 @@ window.Pattr = {
     refreshAllLoops(el = this.root) {
         // Find all p-for templates and refresh them
         if (el.tagName === 'TEMPLATE' && el.hasAttribute('p-for')) {
-            this.handleFor(el, this.data, false);
+            // Use the template's stored scope (from hydration), not this.data
+            // This preserves the correct prototype chain for nested p-scope elements
+            this.handleFor(el, el._scope || this.data, false);
             return; // Don't recurse into template contents
         }
         
@@ -256,6 +258,14 @@ window.Pattr = {
             set: (target, key, value) => {
                 target[key] = value;
                 this.walkDomScoped(this.root, this.data, false);
+                return true;
+            },
+            // Required for 'with' statement to work correctly with proxy
+            // Return true for all string keys so that assignments go through the proxy setter
+            // instead of creating global variables
+            has: (target, key) => {
+                // Only exclude Symbol.unscopables (used by 'with' to exclude properties)
+                if (typeof key === 'symbol') return key in target;
                 return true;
             }
         });
