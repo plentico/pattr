@@ -181,27 +181,11 @@ window.Pattr = {
 
         // Load root data (props from CMS)
         const rootDataJsonString = document.getElementById("p-root-data")?.textContent;
-        let rootData = {};
         try {
-            rootData = JSON.parse(rootDataJsonString || '{}');
+            this.rawData = JSON.parse(rootDataJsonString || '{}');
         } catch (e) {
             console.error("Error parsing root data JSON:", e);
         }
-
-        // Load local data (UI state variables)
-        const localDataJsonString = document.getElementById("p-local-data")?.textContent;
-        let localData = {};
-        try {
-            localData = JSON.parse(localDataJsonString || '{}');
-        } catch (e) {
-            console.error("Error parsing local data JSON:", e);
-        }
-
-        // Merge root and local data
-        this.rawData = { ...rootData, ...localData };
-        
-        // Store root data keys for future API saving (only save props, not local vars)
-        this.rootDataKeys = Object.keys(rootData);
 
         this.buildScopeData(this.root, this.rawData);
         this.data = this.observe(this.rawData)
