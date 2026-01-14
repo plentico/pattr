@@ -382,6 +382,16 @@ window.Pattr = {
         try {
             const statements = pScopeExpr.split(';').map(s => s.trim()).filter(s => s);
             
+            // Identify OUTPUT variables (variables SET by p-scope statements)
+            // Local changes to these should NOT trigger re-execution
+            const outputVars = new Set();
+            statements.forEach(stmt => {
+                const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
+                if (match) {
+                    outputVars.add(match[1]);
+                }
+            });
+            
             // Track variables set during THIS re-execution pass
             const setInThisPass = new Set();
             
@@ -424,27 +434,30 @@ window.Pattr = {
             
             statements.forEach(stmt => {
                 let shouldExecute = false;
+                const parts = stmt.split('=');
+                if (parts.length <= 1) return;
+                const rhs = parts.slice(1).join('=');
                 
-                // Execute if the statement depends on any changed variable
-                allChangedVars.forEach(varName => {
-                    const parts = stmt.split('=');
-                    if (parts.length > 1) {
-                        const rhs = parts.slice(1).join('=');
-                        if (rhs.includes(varName)) {
-                            shouldExecute = true;
-                        }
+                // Execute if RHS contains a PARENT-changed variable
+                changedParentVars.forEach(varName => {
+                    if (rhs.includes(varName)) {
+                        shouldExecute = true;
+                    }
+                });
+                
+                // Execute if RHS contains a LOCAL-changed variable that is NOT an output var
+                // (Local changes to output vars are user modifications that should stick)
+                changedLocalVars.forEach(varName => {
+                    if (!outputVars.has(varName) && rhs.includes(varName)) {
+                        shouldExecute = true;
                     }
                 });
                 
                 // Also execute if the statement depends on a variable set earlier in this pass
                 if (!shouldExecute) {
                     setInThisPass.forEach(varName => {
-                        const parts = stmt.split('=');
-                        if (parts.length > 1) {
-                            const rhs = parts.slice(1).join('=');
-                            if (rhs.includes(varName)) {
-                                shouldExecute = true;
-                            }
+                        if (rhs.includes(varName)) {
+                            shouldExecute = true;
                         }
                     });
                 }
