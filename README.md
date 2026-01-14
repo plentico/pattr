@@ -1,19 +1,21 @@
 # Pattr
 
-Scoped Reactive DOM Updater 
+<img src="https://github.com/jimafisk/pattr2/blob/master/pattr.svg" />
 
-<img src="https://github.com/jimafisk/pattr/blob/master/pattr.svg" />
+A terse, attribute-driven JS library that provides reactive DOM updates within scoped components 
 
 ## Purpose
 
-This is a companion project to [Pico](https://github.com/jimafisk/custom_go_template). It's a simple JS script that interacts with "p" attributes on HTML markup to provide reactive updates.
+This is a companion project to [Pico](https://github.com/plentico/pico). It's a simple JS script that interacts with "p" attributes on HTML markup to provide reactive updates.
 
-It's a similar concept to [AlpineJS](https://alpinejs.dev/), but the main differences are that AlpineJS does way more, and Pattr has an intentionally terse syntax that scopes components so that:
+It's a similar concept to [AlpineJS](https://alpinejs.dev/), but the main differences are that AlpineJS does way more, and Pattr has an intentionally compact syntax and scopes components so that:
 - Parent changes update Child and Grandchild components
 - Child changes update Grandchildren, but do nothing to Parents
 - Grandchildren do not impact Child or Parents
 
-As you can see, components down the chain can diverge from the reactivity provided by their Parent components. However, if a Parent component is updated, it will resync all descendant components.
+Goals: 
+1. Modify the markup as little as possible. That means, simple, readable syntax and making inferences from standard html (e.g. an input with type=number automatically converts string value to number). 
+2. Minimal influence on dev structure. That means avoiding requirements like wrapping loop items or conditional output in singular root elements.
 
 ## Table of Contents
 
@@ -34,16 +36,6 @@ Pattr reads data from JSON script tags in your HTML:
 {
     "title": "Welcome",
     "count": 5
-}
-</script>
-```
-
-### Local Data (UI State)
-```html
-<script id="p-local-data" type="application/json">
-{
-    "show_menu": false,
-    "items": ["Apple", "Banana", "Orange"]
 }
 </script>
 ```
@@ -186,6 +178,8 @@ Create nested components with isolated reactive state using `p-scope` and `p-id`
 ```
 
 ### Scoping Example
+
+Components down the chain can diverge from the reactivity provided by their Parent components. However, if a Parent component is updated, it will resync all descendant components.
 
 ```
 Parent = 2
