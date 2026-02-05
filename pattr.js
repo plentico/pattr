@@ -1,4 +1,6 @@
 window.Pattr = {
+    _templateScopeCounter: 0,
+    
     directives: {
         'p-text': (el, value, modifiers = {}) => {
             let text = String(value);
@@ -599,27 +601,120 @@ window.Pattr = {
         }
     },
 
+    /**
+     * Gets the scope prefix for a template based on its nesting level
+     * Checks ancestors and siblings for parent p-for templates to build hierarchical key
+     */
+    getTemplateScopePrefix(template) {
+        let ancestorKey = '';
+        
+        // First, check if this template has _forTemplate set (meaning it was rendered by an outer loop)
+        // This is the most reliable indicator for nested templates
+        if (template._forTemplate) {
+            const parentForData = template._forTemplate._forData;
+            if (parentForData && parentForData.scopePrefix) {
+                // Find which iteration we're in by checking sibling elements
+                let sibling = template.previousElementSibling;
+                while (sibling) {
+                    if (sibling.hasAttribute && sibling.hasAttribute('p-for-key')) {
+                        const siblingKey = sibling.getAttribute('p-for-key');
+                        ancestorKey = siblingKey + '-';
+                        break;
+                    }
+                    sibling = sibling.previousElementSibling;
+                }
+            }
+        }
+        
+        // If no _forTemplate, check previous siblings for p-for-key
+        // This handles the case where template is adjacent to loop-rendered elements
+        if (!ancestorKey) {
+            let sibling = template.previousElementSibling;
+            while (sibling) {
+                if (sibling.hasAttribute && sibling.hasAttribute('p-for-key')) {
+                    // Check if this sibling shares the same parent template
+                    if (sibling._forTemplate === template._forTemplate) {
+                        const siblingKey = sibling.getAttribute('p-for-key');
+                        ancestorKey = siblingKey + '-';
+                        break;
+                    }
+                }
+                sibling = sibling.previousElementSibling;
+            }
+        }
+        
+        // Also check parent elements for p-for-key
+        if (!ancestorKey) {
+            let parent = template.parentElement;
+            while (parent) {
+                if (parent.hasAttribute && parent.hasAttribute('p-for-key')) {
+                    const parentKey = parent.getAttribute('p-for-key');
+                    ancestorKey = parentKey + '-';
+                    break;
+                }
+                if (parent._forTemplate) {
+                    const parentForData = parent._forTemplate._forData;
+                    if (parentForData) {
+                        const parentIndex = parentForData.renderedElements.indexOf(parent);
+                        if (parentIndex >= 0) {
+                            ancestorKey = (parentForData.scopePrefix || '') + parentIndex + '-';
+                            break;
+                        }
+                    }
+                }
+                parent = parent.parentElement;
+            }
+        }
+        
+        // Generate a unique scope ID for this template
+        if (!template._forScopeId) {
+            template._forScopeId = 's' + (this._templateScopeCounter++);
+        }
+        
+        return ancestorKey + template._forScopeId + ':';
+    },
+
     hydrateLoop(template, parentScope, varPattern, iterableExpr) {
         template._scope = parentScope;
         
         try {
             const iterable = eval(`with (parentScope) { (${iterableExpr}) }`);
             
+            // Get the scope prefix for this template's keys
+            const scopePrefix = this.getTemplateScopePrefix(template);
+            
             template._forData = {
                 varPattern,
                 iterableExpr,
-                renderedElements: []
+                renderedElements: [],
+                scopePrefix
             };
             
-            // Check for SSR-rendered elements (only direct children with p-for-key, not nested)
+            // Check for SSR-rendered elements - only match those with our scope prefix
             const existingElementsByKey = {};
             let sibling = template.nextElementSibling;
             while (sibling && sibling.hasAttribute('p-for-key')) {
-                const key = sibling.getAttribute('p-for-key');
-                if (!existingElementsByKey[key]) {
-                    existingElementsByKey[key] = [];
+                const fullKey = sibling.getAttribute('p-for-key');
+                
+                // Check if this element belongs to this template (has our scope prefix)
+                // or is an old-style unscoped key (for backwards compatibility)
+                const isOurElement = fullKey.startsWith(scopePrefix) || 
+                    (!fullKey.includes(':') && !fullKey.includes('-')); // unscoped legacy key
+                
+                if (isOurElement) {
+                    // Extract the index part from the key
+                    let indexKey;
+                    if (fullKey.startsWith(scopePrefix)) {
+                        indexKey = fullKey.substring(scopePrefix.length);
+                    } else {
+                        indexKey = fullKey; // legacy unscoped key
+                    }
+                    
+                    if (!existingElementsByKey[indexKey]) {
+                        existingElementsByKey[indexKey] = [];
+                    }
+                    existingElementsByKey[indexKey].push(sibling);
                 }
-                existingElementsByKey[key].push(sibling);
                 sibling = sibling.nextElementSibling;
             }
             
@@ -629,11 +724,15 @@ window.Pattr = {
             for (const item of iterable) {
                 const loopScope = this.createLoopScope(parentScope, varPattern, item);
                 
-                if (existingElementsByKey[index]) {
+                if (existingElementsByKey[String(index)]) {
                     // Hydrate existing SSR elements
-                    existingElementsByKey[index].forEach(el => {
+                    existingElementsByKey[String(index)].forEach(el => {
                         el._scope = loopScope;
                         this.setForTemplateRecursive(el, template);
+                        // Update key to use scoped format
+                        if (el.tagName !== 'TEMPLATE') {
+                            el.setAttribute('p-for-key', scopePrefix + index);
+                        }
                         this.walkDom(el, loopScope, true);
                         template._forData.renderedElements.push(el);
                         lastInserted = el;
@@ -648,7 +747,7 @@ window.Pattr = {
                         this.setForTemplateRecursive(el, template);
                         // Only set p-for-key on non-template elements at this level
                         if (el.tagName !== 'TEMPLATE') {
-                            el.setAttribute('p-for-key', index);
+                            el.setAttribute('p-for-key', scopePrefix + index);
                         }
                         this.walkDom(el, loopScope, true);
                     });
@@ -676,6 +775,30 @@ window.Pattr = {
         }
     },
 
+    /**
+     * Recursively removes elements and their nested loop contents
+     */
+    removeLoopElements(elements) {
+        elements.forEach(el => {
+            // If this element is a template with its own rendered elements, remove those first
+            if (el._forData && el._forData.renderedElements) {
+                this.removeLoopElements(el._forData.renderedElements);
+                el._forData.renderedElements = [];
+            }
+            // Also check children for templates with rendered elements
+            if (el.querySelectorAll) {
+                const nestedTemplates = el.querySelectorAll('template[p-for]');
+                nestedTemplates.forEach(tpl => {
+                    if (tpl._forData && tpl._forData.renderedElements) {
+                        this.removeLoopElements(tpl._forData.renderedElements);
+                        tpl._forData.renderedElements = [];
+                    }
+                });
+            }
+            el.remove();
+        });
+    },
+
     refreshLoop(template, parentScope, varPattern, iterableExpr) {
         const forData = template._forData;
         if (!forData) return;
@@ -683,8 +806,11 @@ window.Pattr = {
         try {
             const iterable = eval(`with (parentScope._p_target || parentScope) { (${iterableExpr}) }`);
             
-            // Remove all and re-render
-            forData.renderedElements.forEach(el => el.remove());
+            // Use stored scope prefix or regenerate if needed
+            const scopePrefix = forData.scopePrefix || this.getTemplateScopePrefix(template);
+            
+            // Remove all elements (including nested loop elements) and re-render
+            this.removeLoopElements(forData.renderedElements);
             forData.renderedElements = [];
             
             let index = 0;
@@ -696,7 +822,10 @@ window.Pattr = {
                 elements.forEach(el => {
                     el._scope = loopScope;
                     this.setForTemplateRecursive(el, template);
-                    el.setAttribute('p-for-key', index);
+                    // Only set p-for-key on non-template elements
+                    if (el.tagName !== 'TEMPLATE') {
+                        el.setAttribute('p-for-key', scopePrefix + index);
+                    }
                     this.walkDom(el, loopScope, true);
                 });
                 
