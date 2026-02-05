@@ -570,16 +570,23 @@ window.Pattr = {
         });
     },
 
-    refreshAllLoops(el = this.root) {
+    refreshAllLoops(el = this.root, processedTemplates = new Set()) {
         if (el.tagName === 'TEMPLATE' && el.hasAttribute('p-for')) {
+            // Skip if this template was already processed during this refresh cycle
+            // (e.g., as a nested template during an outer loop's refresh)
+            if (processedTemplates.has(el)) {
+                return;
+            }
+            processedTemplates.add(el);
             this.handleFor(el, el._scope || this.data, false);
             return;
         }
         
         let child = el.firstElementChild;
         while (child) {
-            this.refreshAllLoops(child);
-            child = child.nextElementSibling;
+            const nextChild = child.nextElementSibling; // Store before processing in case DOM changes
+            this.refreshAllLoops(child, processedTemplates);
+            child = nextChild;
         }
     },
 
@@ -813,12 +820,17 @@ window.Pattr = {
             this.removeLoopElements(forData.renderedElements);
             forData.renderedElements = [];
             
+            // Track the actual last inserted element (accounts for nested template output)
+            let lastInsertedElement = template;
+            
             let index = 0;
             for (const item of iterable) {
                 const clone = template.content.cloneNode(true);
                 const loopScope = this.createLoopScope(parentScope, forData.varPattern, item);
                 
                 const elements = Array.from(clone.children);
+                
+                // First pass: set up scope and basic attributes (but don't process nested templates yet)
                 elements.forEach(el => {
                     el._scope = loopScope;
                     this.setForTemplateRecursive(el, template);
@@ -826,19 +838,63 @@ window.Pattr = {
                     if (el.tagName !== 'TEMPLATE') {
                         el.setAttribute('p-for-key', scopePrefix + index);
                     }
+                });
+                
+                // Insert elements into DOM after the last inserted element
+                const fragment = document.createDocumentFragment();
+                elements.forEach(el => fragment.appendChild(el));
+                lastInsertedElement.parentNode.insertBefore(fragment, lastInsertedElement.nextSibling);
+                forData.renderedElements.push(...elements);
+                
+                // Second pass: now that elements are in DOM, process them (including nested templates)
+                elements.forEach(el => {
                     this.walkDom(el, loopScope, true);
                 });
                 
-                const insertAfter = forData.renderedElements[forData.renderedElements.length - 1] || template;
-                const fragment = document.createDocumentFragment();
-                elements.forEach(el => fragment.appendChild(el));
-                insertAfter.parentNode.insertBefore(fragment, insertAfter.nextSibling);
-                forData.renderedElements.push(...elements);
+                // Update lastInsertedElement to the actual last element in the DOM from this iteration
+                // This accounts for nested template rendered elements
+                const lastElement = elements[elements.length - 1];
+                if (lastElement) {
+                    lastInsertedElement = this.findLastRenderedSibling(lastElement);
+                }
+                
                 index++;
             }
         } catch (e) {
             console.error(`Error in p-for refresh: ${iterableExpr}`, e);
         }
+    },
+
+    /**
+     * Finds the last sibling element rendered by a template (including nested template output)
+     */
+    findLastRenderedSibling(element) {
+        let last = element;
+        
+        // If this is a template with rendered elements, get the last one
+        if (element.tagName === 'TEMPLATE' && element._forData && element._forData.renderedElements.length > 0) {
+            const nestedLast = element._forData.renderedElements[element._forData.renderedElements.length - 1];
+            last = this.findLastRenderedSibling(nestedLast);
+        }
+        
+        // Also check the next sibling - it might be output from this element's nested template
+        let sibling = last.nextElementSibling;
+        while (sibling) {
+            // If sibling was rendered by a template that's part of our chain, include it
+            if (sibling._forTemplate === element._forTemplate || 
+                (element.tagName === 'TEMPLATE' && sibling._forTemplate === element)) {
+                last = sibling;
+                // Recursively check if this sibling also has nested output
+                if (sibling.tagName === 'TEMPLATE' && sibling._forData && sibling._forData.renderedElements.length > 0) {
+                    last = this.findLastRenderedSibling(sibling._forData.renderedElements[sibling._forData.renderedElements.length - 1]);
+                }
+                sibling = last.nextElementSibling;
+            } else {
+                break;
+            }
+        }
+        
+        return last;
     },
 
     createLoopScope(parentScope, varPattern, item) {
