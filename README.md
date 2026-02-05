@@ -1,6 +1,6 @@
 # Pattr
 
-<img src="https://github.com/jimafisk/pattr2/blob/master/pattr.svg" />
+<img src="https://github.com/plentico/pattr/blob/master/pattr.svg" />
 
 A terse, attribute-driven JS library that provides reactive DOM updates within scoped components 
 

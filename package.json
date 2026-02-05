@@ -4,6 +4,7 @@
   "description": "A lightweight reactive framework",
   "type": "module",
   "scripts": {
+    "dev": "echo '\\n  Server running at:\\n\\n  ➜  http://localhost:8080\\n' && npx http-server -p 8080 -c-1",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -11,6 +12,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
+    "http-server": "^14.1.1",
     "jsdom": "^23.0.0",
     "vitest": "^1.0.0"
   }
