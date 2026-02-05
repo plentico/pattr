@@ -68,6 +68,12 @@
                     <button p-on:click="cats[i] = cat + cat.slice(-1)">+</button>
                     <button p-on:click="cats[i] = cat.slice(0, -1)">-</button>
                 </div>
+                <template p-for="l of cat">
+                    <button
+                        p-text="l"
+                        p-on:click="cats[i] = cat + l"
+                    ></button>
+                </template>
             </template>
             <div p-for-key="0">Ralph</div>
             <div p-for-key="1">Betsy</div>

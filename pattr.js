@@ -690,7 +690,10 @@ window.Pattr = {
                     this.walkDom(el, loopScope, true);
                 });
                 
-                template.parentNode.insertBefore(clone, template.nextSibling);
+                const insertAfter = forData.renderedElements[forData.renderedElements.length - 1] || template;
+                const fragment = document.createDocumentFragment();
+                elements.forEach(el => fragment.appendChild(el));
+                insertAfter.parentNode.insertBefore(fragment, insertAfter.nextSibling);
                 forData.renderedElements.push(...elements);
                 index++;
             }
