@@ -942,6 +942,12 @@ window.Pattr = {
     walkDom(el, parentScope, isHydrating = false) {
         // Handle p-for templates separately
         if (el.tagName === 'TEMPLATE' && el.hasAttribute('p-for')) {
+            // Skip nested templates during refresh (non-hydrating) - they will be 
+            // re-created by their parent loop. Their scope variables come from the 
+            // parent loop iteration, not the static scope chain.
+            if (!isHydrating && el._forTemplate) {
+                return;
+            }
             this.handleFor(el, parentScope, isHydrating);
             return;
         }
