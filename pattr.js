@@ -982,15 +982,16 @@ window.Pattr = {
         }
 
         // Recurse to children
-        // Capture nextElementSibling BEFORE processing in case child is a p-for template
-        // that renders new siblings - we don't want to visit those with wrong scope
-        let child = el.firstElementChild;
-        while (child) {
-            const nextChild = child.nextElementSibling;
+        // Use Array.from to capture a snapshot of children, avoiding issues where
+        // p-for templates insert new elements during the walk
+        const children = Array.from(el.children);
+        for (const child of children) {
             this.walkDom(child, currentScope, isHydrating);
-            child = nextChild;
         }
     }
+
+
 }
 
 window.Pattr.start()
+
