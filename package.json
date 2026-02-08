@@ -3,17 +3,56 @@
   "version": "1.0.0",
   "description": "A lightweight reactive framework",
   "type": "module",
+  "main": "pattr.js",
+  "browser": "pattr.js",
+  "unpkg": "pattr.min.js",
+  "jsdelivr": "pattr.min.js",
+  "exports": {
+    ".": {
+      "browser": "./pattr.js",
+      "default": "./pattr.js"
+    },
+    "./min": {
+      "browser": "./pattr.min.js",
+      "default": "./pattr.min.js"
+    }
+  },
+  "files": [
+    "pattr.js",
+    "pattr.min.js"
+  ],
   "scripts": {
     "dev": "echo '\\n  Server running at:\\n\\n  ➜  http://localhost:8080\\n' && npx http-server -p 8080 -c-1",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run test && npm run test:e2e",
+    "build": "terser pattr.js -o pattr.min.js -c -m --comments '/^!/'",
+    "prepublishOnly": "npm run test:all && npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plentico/pattr.git"
+  },
+  "keywords": [
+    "reactive",
+    "framework",
+    "lightweight",
+    "dom",
+    "data-binding",
+    "alpinejs-alternative"
+  ],
+  "author": "Plentico",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/plentico/pattr/issues"
+  },
+  "homepage": "https://github.com/plentico/pattr#readme",
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "http-server": "^14.1.1",
     "jsdom": "^23.0.0",
+    "terser": "^5.27.0",
     "vitest": "^1.0.0"
   }
 }

@@ -1,3 +1,9 @@
+/*!
+ * Pattr v1.0.0
+ * A lightweight reactive framework
+ * https://github.com/plentico/pattr
+ * MIT License
+ */
 window.Pattr = {
     _templateScopeCounter: 0,
     
