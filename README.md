@@ -318,13 +318,44 @@ Chain multiple modifiers together:
 <div p-html:allow.strong.em:trim.50="htmlContent"></div>
 ```
 
+## Installation
+
+### CDN
+
+```html
+<!-- Via unpkg -->
+<script src="https://unpkg.com/@plentico/pattr" defer></script>
+
+<!-- Via jsdelivr -->
+<script src="https://cdn.jsdelivr.net/npm/@plentico/pattr" defer></script>
+
+<!-- Minified -->
+<script src="https://unpkg.com/@plentico/pattr/min" defer></script>
+```
+
+### npm
+
+```bash
+npm install @plentico/pattr
+```
+
+```javascript
+import Pattr from '@plentico/pattr';
+```
+
+### Local
+
+```html
+<script src="/pattr.js" defer></script>
+```
+
 ## Complete Example
 
 ```html
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="/pattr.js" defer></script>
+    <script src="https://unpkg.com/@plentico/pattr" defer></script>
     <script id="p-root-data" type="application/json">
     {
         "title": "Todo App",
