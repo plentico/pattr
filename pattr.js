@@ -203,10 +203,25 @@ window.Pattr = {
         this.refreshAllLoops();
     },
 
+    generateDomPathId(el) {
+        const path = [];
+        let node = el;
+        while (node && node.tagName !== 'HTML') {
+            const parent = node.parentElement;
+            if (parent) {
+                const index = Array.from(parent.children).indexOf(node);
+                path.unshift(`${node.tagName}[${index}]`);
+            }
+            node = parent;
+        }
+        return path.join('/');
+    },
+
     buildScopeData(el, parentData) {
         let currentData = parentData;
         if (el.hasAttribute('p-scope')) {
-            const dataId = el.getAttribute('p-id') || 'missing_p-id';
+            // Use explicit p-id if provided, otherwise generate from DOM position
+            const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
             if (!parentData._p_children) {
                 parentData._p_children = {};
             }
@@ -215,6 +230,8 @@ window.Pattr = {
             }
             currentData = parentData._p_children[dataId]; 
             currentData._p_scope = el.getAttribute('p-scope');
+            // Store the ID for later use
+            currentData._p_id = dataId;
         }
         let child = el.firstElementChild;
         while (child) {
@@ -257,7 +274,7 @@ window.Pattr = {
      * Creates a new scope for an element with p-scope during hydration
      */
     initScope(el, parentScope) {
-        const dataId = el.getAttribute('p-id');
+        const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
         const localRawData = parentScope._p_target._p_children[dataId];
         
         // Create new inherited Proxy

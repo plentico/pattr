@@ -72,7 +72,7 @@ For use with wrapped components (e.g., from Pico templating), evaluate visibilit
 
 ```html
 <!-- From Pico: {if age > 10} wraps a component that has p-scope -->
-<div p-show:pre-scope="age > 10" p-scope="double = age * 2" p-id="pre-scope-demo">
+<div p-show:pre-scope="age > 10" p-scope="double = age * 2">
     Your doubled age is: <span p-text="double"></span>
 </div>
 ```
@@ -88,7 +88,6 @@ You can combine both for complex scenarios:
     p-show:pre-scope="age > 10" 
     p-show="double > 30" 
     p-scope="double = age * 2"
-    p-id="two-show-attr-demo"
 >
     Your doubled age (<span p-text="double"></span>) is greater than 30
 </div>
@@ -186,7 +185,7 @@ Available events: `click`, `focus`, `blur`, `input`, `change`, `submit`, `keydow
 
 ## Scoped Components
 
-Create nested components with isolated reactive state using `p-scope` and `p-id`:
+Create nested components with isolated reactive state using `p-scope` (and optionally `p-id`):
 
 ```html
 <div>
@@ -198,12 +197,14 @@ Create nested components with isolated reactive state using `p-scope` and `p-id`
     <div>Child count (×2): <span p-text="count"></span></div>
     <button p-on:click="count++">+</button>
     
-    <section p-id="grandchild1" p-scope="count = count + 1;">
+    <section p-scope="count = count + 1;">
         <div>Grandchild count (+1): <span p-text="count"></span></div>
         <button p-on:click="count++">+</button>
     </section>
 </section>
 ```
+
+> The `p-id` attribute used to be required to use p-scope, now it's optional and can be omitted entirely. It's still available because it could be helpful for debugging purposes, migrating data between elements, or if external tools/scripts need to reference scopes by name.
 
 ### Scoping Example
 
@@ -419,7 +420,7 @@ import Pattr from '@plentico/pattr';
     </template>
     
     <!-- Scoped component -->
-    <section p-id="stats" p-scope="count = todos.length;">
+    <section p-scope="count = todos.length;">
         <p>Total todos: <span p-text="count"></span></p>
     </section>
 </body>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" p-id="root" p-scope="show_cats = false; cats = ['Ralph', 'Betsy', 'Drago']; add_cat = ''; emoji = false; coolname = name + 'cool';">
+<html lang="en" p-scope="show_cats = false; cats = ['Ralph', 'Betsy', 'Drago']; add_cat = ''; emoji = false; coolname = name + 'cool';">
     <head>
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50'/></svg>">
         <script src="/pattr.js" defer></script>
@@ -26,7 +26,6 @@
         </div>
         <div 
             id="pre-scope-box"
-            p-id="pre-scope"
             p-show:pre-scope="count < 4" 
             p-scope="count = count * 2"
             style="padding: 3px; margin: 10px 0; background: #e0f7fa; border: 1px solid #00acc1;"
@@ -41,21 +40,21 @@
             <span p-text="coolname"></span>
         </div>
         <hr>
-        <section p-id="l1r96" p-scope="count = count + 1; count = count * 2;">
+        <section p-scope="count = count + 1; count = count * 2;">
             <div>Sequential Scope (count +1 *2):</div>
             <div p-text="`New count to: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <hr>
         </section>
-        <section p-id="ek753" p-scope="count = count * 2; name = name + 'o';">
+        <section p-scope="count = count * 2; name = name + 'o';">
             <div>Child Component (count *2):</div>
             <div p-text="`${name} can count to: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <input type="text" p-model="name" />
             <hr>
-            <section p-id="xf9g3" p-scope="count = count + 1; name = name + ' Burns';">
+            <section p-scope="count = count + 1; name = name + ' Burns';">
                 <div>Grandchild Component (child count +1):</div>
                 <div p-text="`${name} can count to: ${count}`"></div>
                 <button p-on:click="count++">+</button>
