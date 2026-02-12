@@ -66,6 +66,34 @@ Both data sources are merged and available throughout your app.
 <span p-show="!show_menu">Menu is hidden</span>
 ```
 
+#### `p-show:pre-scope` - Pre-Scope Conditional Display
+
+For use with wrapped components (e.g., from Pico templating), evaluate visibility **before** `p-scope` runs:
+
+```html
+<!-- From Pico: {if age > 10} wraps a component that has p-scope -->
+<div p-show:pre-scope="age > 10" p-scope="double = age * 2" p-id="pre-scope-demo">
+    Your doubled age is: <span p-text="double"></span>
+</div>
+```
+
+This ensures the conditional from the parent template (`age > 10`) is evaluated using the **parent scope** before the component's `p-scope` executes. Without this, the condition would be evaluated after scoping, which may not be the desired behavior for conditional wrapper components.
+
+You can combine both for complex scenarios:
+
+```html
+<!-- Pre-scope: evaluated before p-scope (parent scope context) -->
+<!-- Regular p-show: evaluated after p-scope (scoped context) -->
+<div 
+    p-show:pre-scope="age > 10" 
+    p-show="double > 30" 
+    p-scope="double = age * 2"
+    p-id="two-show-attr-demo"
+>
+    Your doubled age (<span p-text="double"></span>) is greater than 30
+</div>
+```
+
 ### `p-style` - Set Styles
 
 **String syntax:**

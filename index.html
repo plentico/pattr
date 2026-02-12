@@ -24,6 +24,16 @@
             <span p-show="count === 2">Exactly 2</span>
             <span p-show="count < 2">Less than 2</span>
         </div>
+        <div 
+            id="pre-scope-box"
+            p-id="pre-scope"
+            p-show:pre-scope="count < 4" 
+            p-scope="count = count * 2"
+            style="padding: 3px; margin: 10px 0; background: #e0f7fa; border: 1px solid #00acc1;"
+        >
+            <div>Only show when parent count < 4 (checked before scoping)</div>
+            <div>Inside scope (doubled) count = <span p-text="count"></span></div>
+        </div>
         <input type="text" p-model="name" p-on:focus="emoji = true" p-on:blur="emoji = false" />
         <span p-show="emoji">🤓</span>
         <div id="coolname">

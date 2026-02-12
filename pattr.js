@@ -958,6 +958,16 @@ window.Pattr = {
             return;
         }
 
+        // Evaluate p-show.pre-scope before determining scope (for Pico conditional components)
+        const preScopeShowAttr = Array.from(el.attributes).find(attr => {
+            const parsed = this.parseDirectiveModifiers(attr.name);
+            return parsed.directive === 'p-show' && parsed.modifiers['pre-scope'];
+        });
+        if (preScopeShowAttr && parentScope) {
+            const value = eval(`with (parentScope) { (${preScopeShowAttr.value}) }`);
+            this.directives['p-show'](el, value);
+        }
+
         // Determine the scope for this element
         let currentScope = parentScope;
         
@@ -976,9 +986,20 @@ window.Pattr = {
             this.registerModelBinding(el);
         }
         
-        // Evaluate directives
+        // Evaluate directives (skip pre-scope show as it's already handled)
         if (currentScope) {
-            this.evaluateDirectives(el, currentScope);
+            Array.from(el.attributes).forEach(attr => {
+                const parsed = this.parseDirectiveModifiers(attr.name);
+                // Skip pre-scope show, handle regular p-show and other directives
+                if (parsed.directive === 'p-show' && parsed.modifiers['pre-scope']) {
+                    return; // Already handled above
+                }
+                if (Object.keys(this.directives).includes(parsed.directive)) {
+                    const evalScope = el._scope || currentScope;
+                    const value = eval(`with (evalScope) { (${attr.value}) }`);
+                    this.directives[parsed.directive](el, value, parsed.modifiers);
+                }
+            });
         }
 
         // Recurse to children

@@ -1,6 +1,6 @@
 {
   "name": "@plentico/pattr",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A lightweight reactive framework",
   "type": "module",
   "main": "pattr.js",
