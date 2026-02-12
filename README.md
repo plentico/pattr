@@ -204,7 +204,7 @@ Create nested components with isolated reactive state using `p-scope` (and optio
 </section>
 ```
 
-> The `p-id` attribute used to be required to use p-scope, now it's optional and can be omitted entirely. It's still available because it could be helpful for debugging purposes, migrating data between elements, or if external tools/scripts need to reference scopes by name.
+> The `p-id` attribute used to be required to use `p-scope`, now it's optional and can be omitted entirely. It's still available because it could be helpful for debugging purposes, migrating data between elements, or if external tools/scripts need to reference scopes by name.
 
 ### Scoping Example
 

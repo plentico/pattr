@@ -42,7 +42,7 @@ test.describe('p-text directive', () => {
   });
 
   test('nested scope template literals update correctly', async ({ page }) => {
-    const childSection = page.locator('section[p-id="ek753"]');
+    const childSection = page.locator('#child-scope');
     const childText = childSection.locator('[p-text]').first();
     const childInput = childSection.locator('> input[p-model="name"]');
 

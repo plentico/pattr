@@ -40,21 +40,21 @@
             <span p-text="coolname"></span>
         </div>
         <hr>
-        <section p-scope="count = count + 1; count = count * 2;">
+        <section id="sequential-scope" p-scope="count = count + 1; count = count * 2;">
             <div>Sequential Scope (count +1 *2):</div>
             <div p-text="`New count to: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <hr>
         </section>
-        <section p-scope="count = count * 2; name = name + 'o';">
+        <section id="child-scope" p-scope="count = count * 2; name = name + 'o';">
             <div>Child Component (count *2):</div>
             <div p-text="`${name} can count to: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <input type="text" p-model="name" />
             <hr>
-            <section p-scope="count = count + 1; name = name + ' Burns';">
+            <section id="grandchild-scope" p-scope="count = count + 1; name = name + ' Burns';">
                 <div>Grandchild Component (child count +1):</div>
                 <div p-text="`${name} can count to: ${count}`"></div>
                 <button p-on:click="count++">+</button>

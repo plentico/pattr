@@ -9,25 +9,25 @@ test.describe('p-scope directive', () => {
   test('initial values are computed sequentially', async ({ page }) => {
     // Sequential Scope: count = count + 1; count = count * 2
     // With parent count = 2: (2+1)*2 = 6
-    await expect(page.locator('section[p-id="l1r96"] [p-text]').first()).toHaveText(/6/);
+    await expect(page.locator('#sequential-scope [p-text]').first()).toHaveText(/6/);
   });
 
   test('child scope inherits from parent correctly', async ({ page }) => {
     // Parent count = 2
     // Child (*2): 2 * 2 = 4
-    await expect(page.locator('section[p-id="ek753"] [p-text]').first()).toContainText('4');
+    await expect(page.locator('#child-scope [p-text]').first()).toContainText('4');
   });
 
   test('grandchild scope chains correctly', async ({ page }) => {
     // Parent count = 2
     // Child (*2): 4
     // Grandchild (+1): 5
-    await expect(page.locator('section[p-id="xf9g3"] [p-text]').first()).toContainText('5');
+    await expect(page.locator('#grandchild-scope [p-text]').first()).toContainText('5');
   });
 
   // Local Increment
   test('sequential scope increment works correctly', async ({ page }) => {
-    const sequentialSection = page.locator('section[p-id="l1r96"]');
+    const sequentialSection = page.locator('#sequential-scope');
     const countDisplay = sequentialSection.locator('[p-text]').first();
     const plusButton = sequentialSection.locator('button').first();
 
@@ -44,7 +44,7 @@ test.describe('p-scope directive', () => {
   });
 
   test('child scope increment works correctly', async ({ page }) => {
-    const childSection = page.locator('section[p-id="ek753"]');
+    const childSection = page.locator('#child-scope');
     const countDisplay = childSection.locator('[p-text]').first();
     const plusButton = childSection.locator('button').first();
 
@@ -57,8 +57,8 @@ test.describe('p-scope directive', () => {
   });
 
   test('sibling scopes are independent', async ({ page }) => {
-    const sequentialSection = page.locator('section[p-id="l1r96"]');
-    const childSection = page.locator('section[p-id="ek753"]');
+    const sequentialSection = page.locator('#sequential-scope');
+    const childSection = page.locator('#child-scope');
 
     const seqCountDisplay = sequentialSection.locator('[p-text]').first();
     const childCountDisplay = childSection.locator('[p-text]').first();
@@ -79,9 +79,9 @@ test.describe('p-scope directive', () => {
   // Parent Change Propagation
   test('parent count change updates child scopes', async ({ page }) => {
     const parentPlusButton = page.locator('body > button').first();
-    const sequentialDisplay = page.locator('section[p-id="l1r96"] [p-text]').first();
-    const childDisplay = page.locator('section[p-id="ek753"] [p-text]').first();
-    const grandchildDisplay = page.locator('section[p-id="xf9g3"] [p-text]').first();
+    const sequentialDisplay = page.locator('#sequential-scope [p-text]').first();
+    const childDisplay = page.locator('#child-scope [p-text]').first();
+    const grandchildDisplay = page.locator('#grandchild-scope [p-text]').first();
 
     // Initial: Parent=2, Sequential=(2+1)*2=6, Child=2*2=4, Grandchild=4+1=5
     await expect(sequentialDisplay).toHaveText(/6/);
@@ -100,8 +100,8 @@ test.describe('p-scope directive', () => {
   test('parent name change updates derived values', async ({ page }) => {
     const coolnameDisplay = page.locator('span[p-text="coolname"]');
     const nameInput = page.locator('input[p-model="name"]').first();
-    const childNameDisplay = page.locator('section[p-id="ek753"] [p-text]').first();
-    const grandchildNameDisplay = page.locator('section[p-id="xf9g3"] [p-text]').first();
+    const childNameDisplay = page.locator('#child-scope [p-text]').first();
+    const grandchildNameDisplay = page.locator('#grandchild-scope [p-text]').first();
 
     // Initial: name=Bob, coolname=Bobcool, child=Bobo, grandchild=Bobo Burns
     await expect(coolnameDisplay).toHaveText('Bobcool');
@@ -120,7 +120,7 @@ test.describe('p-scope directive', () => {
   // Edge Cases
   test('multiple increments then parent change works correctly', async ({ page }) => {
     const parentPlusButton = page.locator('body > button').first();
-    const sequentialSection = page.locator('section[p-id="l1r96"]');
+    const sequentialSection = page.locator('#sequential-scope');
     const seqCountDisplay = sequentialSection.locator('[p-text]').first();
     const seqPlusButton = sequentialSection.locator('button').first();
 
@@ -139,7 +139,7 @@ test.describe('p-scope directive', () => {
   });
 
   test('decrement works correctly', async ({ page }) => {
-    const childSection = page.locator('section[p-id="ek753"]');
+    const childSection = page.locator('#child-scope');
     const countDisplay = childSection.locator('[p-text]').first();
     // Get the second button (minus button) within child section
     const minusButton = childSection.locator('button').nth(1);
