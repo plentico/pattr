@@ -134,7 +134,12 @@ window.Pattr = {
             }
         },
         'p-model': (el, value) => {
-            el.value = value
+            // If value is an array, join with commas for display
+            if (Array.isArray(value)) {
+                el.value = value.join(', ');
+            } else {
+                el.value = value;
+            }
         },
         'p-attr': (el, value, modifiers = {}) => {
             // Two usage modes:
@@ -544,7 +549,14 @@ window.Pattr = {
             } else if (type === 'radio') {
                 value = e.target.checked ? e.target.value : undefined;
             } else {
-                value = e.target.value;
+                // Check if current value is an array
+                const currentValue = eval(`with (el._scope) { ${modelAttr} }`);
+                if (Array.isArray(currentValue)) {
+                    // Split by comma and trim, filter out empty strings
+                    value = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                } else {
+                    value = e.target.value;
+                }
             }
             
             if (value !== undefined) {

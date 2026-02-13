@@ -69,6 +69,7 @@
         </button>
         <div class="cats-list" p-style="show_cats ? 'max-height: 300px' : 'max-height: 0'">
             <h3>Cats</h3>
+            <input type="text" p-model="cats" />
             <template p-for="[i, cat] of cats.entries()">
                 <div>
                     <div p-text="cat"></div>
