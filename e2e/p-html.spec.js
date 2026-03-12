@@ -26,4 +26,26 @@ test.describe('p-html directive', () => {
     expect(text.length).toBeLessThanOrEqual(21); // 18 + "..."
     expect(text).toContain('...');
   });
+
+  test('allow modifier preserves nested allowed tags when parent is disallowed', async ({ page }) => {
+    // This tests the fix for: when only <strong> is allowed but content is <em>some<strong>thing</strong></em>,
+    // the <strong> tag should still be preserved after filtering out the <em> tag
+    const firstSpan = page.locator('span.allow-strong');
+    // Should contain a strong tag around "thi..."
+    await expect(firstSpan.locator('strong')).toBeVisible();
+    const strongText = await firstSpan.locator('strong').innerText();
+    expect(strongText).toBe('thi...');
+    // The full text should be "somethi..."
+    const fullText = await firstSpan.innerText();
+    expect(fullText).toBe('somethi...');
+  });
+
+  test('allow modifier with multiple tags preserves all allowed tags', async ({ page }) => {
+    // When both em and strong are allowed, both should be preserved
+    const secondSpan = page.locator('span.allow-strong-and-em');
+    await expect(secondSpan.locator('em')).toBeVisible();
+    await expect(secondSpan.locator('em strong')).toBeVisible();
+    const strongText = await secondSpan.locator('em strong').innerText();
+    expect(strongText).toBe('thi...');
+  });
 });

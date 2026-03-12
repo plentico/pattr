@@ -35,8 +35,13 @@ window.Pattr = {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         const tagName = node.tagName.toLowerCase();
                         if (!allowedTags.includes(tagName)) {
-                            // Replace with text content
-                            return document.createTextNode(node.textContent);
+                            // Replace with filtered children (unwrap the tag but keep allowed nested tags)
+                            const fragment = document.createDocumentFragment();
+                            Array.from(node.childNodes).forEach(child => {
+                                const filteredChild = filterNode(child);
+                                if (filteredChild) fragment.appendChild(filteredChild);
+                            });
+                            return fragment;
                         }
                         // Keep element but filter children
                         const filtered = node.cloneNode(false);
