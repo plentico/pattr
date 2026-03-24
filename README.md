@@ -127,6 +127,51 @@ You can combine both for complex scenarios:
 <div p-class="{ active: isActive, disabled: !isEnabled }"></div>
 ```
 
+#### Static Class Merging
+
+By default, `p-class` preserves static classes defined in your HTML and merges them with dynamic classes:
+
+```html
+<div class="card animate" p-class="{ 'highlight': isActive }">
+```
+
+- `card` and `animate` are preserved (static classes not in p-class)
+- `highlight` is added/removed based on `isActive`
+- Result: `"card animate"` or `"card animate highlight"`
+
+#### Class Collision Handling
+
+If a static class has the same name as a dynamic class, `p-class` takes precedence and manages it:
+
+```html
+<div class="item collapsed" p-class="{ 'collapsed': !isExpanded }">
+```
+
+- `item` is preserved (no collision)
+- `collapsed` is managed by `p-class` (collision - p-class wins)
+- When `isExpanded=true`: class is `"item"` (collapsed removed)
+- When `isExpanded=false`: class is `"item collapsed"`
+
+#### `p-class:replace` - Replace All Classes
+
+Use the `:replace` modifier to completely replace all classes (old behavior):
+
+```html
+<!-- Without :replace - merges with static classes -->
+<div class="static-class" p-class="themeClass">
+<!-- Result: "static-class dark-theme" -->
+
+<!-- With :replace - replaces all classes -->
+<div class="static-class" p-class:replace="themeClass">
+<!-- Result: "dark-theme" (static-class removed) -->
+```
+
+This is useful when you want `p-class` to have complete control over the element's classes:
+
+```html
+<div class="old-theme" p-class:replace="{ 'light-theme': isLight, 'dark-theme': !isLight }">
+```
+
 ### `p-attr` - Set Attributes
 
 **Single attributes**

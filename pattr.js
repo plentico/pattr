@@ -126,17 +126,76 @@ window.Pattr = {
                 Object.assign(el.style, value);
             }
         },
-        'p-class': (el, value) => {
-            if (typeof value === 'string') {
-                el.className = value;
-            } else if (Array.isArray(value)) {
-                el.className = value.join(' ');
-            } else if (typeof value === 'object' && value !== null) {
-                // Object format: { className: boolean, ... }
-                el.className = Object.keys(value)
-                    .filter(key => value[key])
-                    .join(' ');
+        'p-class': (el, value, modifiers = {}) => {
+            // Check for .replace modifier - completely replaces all classes
+            const shouldReplace = modifiers.replace !== undefined;
+
+            if (shouldReplace) {
+                // Replace mode: p-class.replace completely controls the className
+                if (typeof value === 'string') {
+                    el.className = value;
+                } else if (Array.isArray(value)) {
+                    el.className = value.join(' ');
+                } else if (typeof value === 'object' && value !== null) {
+                    el.className = Object.keys(value)
+                        .filter(key => value[key])
+                        .join(' ');
+                }
+                return;
             }
+
+            // Merge mode: preserve static classes, add/remove dynamic ones
+            
+            // Calculate new dynamic classes from the value FIRST
+            let newDynamicClasses = new Set();
+            // Track ALL potential dynamic class names (for collision detection with object format)
+            let allPotentialDynamicClasses = new Set();
+            
+            if (typeof value === 'string' && value) {
+                value.split(' ').forEach(c => {
+                    if (c) {
+                        newDynamicClasses.add(c);
+                        allPotentialDynamicClasses.add(c);
+                    }
+                });
+            } else if (Array.isArray(value)) {
+                value.forEach(c => {
+                    if (c) {
+                        newDynamicClasses.add(c);
+                        allPotentialDynamicClasses.add(c);
+                    }
+                });
+            } else if (typeof value === 'object' && value !== null) {
+                Object.keys(value).forEach(key => {
+                    // All keys are potential dynamic classes (for collision detection)
+                    allPotentialDynamicClasses.add(key);
+                    // Only add to active dynamic classes if value is truthy
+                    if (value[key]) newDynamicClasses.add(key);
+                });
+            }
+
+            // Initialize static classes tracking on first run
+            // IMPORTANT: Exclude any classes that are potential dynamic classes (collisions)
+            if (!el._p_staticClasses) {
+                const currentClasses = el.className ? el.className.split(' ').filter(c => c) : [];
+                // Exclude ALL potential dynamic class names (not just currently active ones)
+                // This ensures that for object format like {collapsed: false}, 'collapsed'
+                // is still excluded from static classes even though it's not currently active
+                el._p_staticClasses = currentClasses.filter(c => !allPotentialDynamicClasses.has(c));
+            }
+            if (!el._p_dynamicClasses) {
+                el._p_dynamicClasses = new Set();
+            }
+
+            // Update tracked dynamic classes
+            el._p_dynamicClasses = newDynamicClasses;
+
+            // Build final class list:
+            // 1. Start with static classes (already excludes collisions from first run)
+            // 2. Add all current dynamic classes
+            const finalClasses = [...el._p_staticClasses, ...el._p_dynamicClasses];
+
+            el.className = finalClasses.join(' ');
         },
         'p-model': (el, value) => {
             // If value is an array, join with commas for display
@@ -1049,4 +1108,3 @@ window.Pattr = {
 }
 
 window.Pattr.start()
-
