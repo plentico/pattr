@@ -417,6 +417,43 @@ window.Pattr = {
         });
         
         for (const stmt of statements) {
+            // Check for array destructuring: [a, b] = expr
+            const arrayDestructMatch = stmt.match(/^\[([^\]]+)\]\s*=\s*(.+)$/);
+            if (arrayDestructMatch) {
+                const [, vars, expr] = arrayDestructMatch;
+                const varNames = vars.split(',').map(v => v.trim());
+                try {
+                    const value = eval(`with (sequentialScope) { (${expr}) }`);
+                    if (Array.isArray(value)) {
+                        varNames.forEach((varName, i) => {
+                            target[varName] = value[i];
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Error executing p-scope array destructuring "${stmt}":`, e);
+                }
+                continue;
+            }
+            
+            // Check for object destructuring: {a, b} = expr
+            const objDestructMatch = stmt.match(/^\{([^}]+)\}\s*=\s*(.+)$/);
+            if (objDestructMatch) {
+                const [, vars, expr] = objDestructMatch;
+                const varNames = vars.split(',').map(v => v.trim());
+                try {
+                    const value = eval(`with (sequentialScope) { (${expr}) }`);
+                    if (typeof value === 'object' && value !== null) {
+                        varNames.forEach(varName => {
+                            target[varName] = value[varName];
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Error executing p-scope object destructuring "${stmt}":`, e);
+                }
+                continue;
+            }
+            
+            // Regular variable assignment
             const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
             if (match) {
                 const [, varName, expr] = match;
@@ -480,6 +517,23 @@ window.Pattr = {
             // Local changes to these should NOT trigger re-execution
             const outputVars = new Set();
             statements.forEach(stmt => {
+                // Handle array destructuring: [a, b] = expr
+                const arrayMatch = stmt.match(/^\[([^\]]+)\]\s*=\s*(.+)$/);
+                if (arrayMatch) {
+                    const vars = arrayMatch[1].split(',').map(v => v.trim());
+                    vars.forEach(v => outputVars.add(v));
+                    return;
+                }
+                
+                // Handle object destructuring: {a, b} = expr
+                const objMatch = stmt.match(/^\{([^}]+)\}\s*=\s*(.+)$/);
+                if (objMatch) {
+                    const vars = objMatch[1].split(',').map(v => v.trim());
+                    vars.forEach(v => outputVars.add(v));
+                    return;
+                }
+                
+                // Regular variable
                 const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
                 if (match) {
                     outputVars.add(match[1]);
@@ -557,6 +611,37 @@ window.Pattr = {
                 }
                 
                 if (shouldExecute) {
+                    // Handle array destructuring: [a, b] = expr
+                    const arrayMatch = stmt.match(/^\[([^\]]+)\]\s*=\s*(.+)$/);
+                    if (arrayMatch) {
+                        const [, vars, expr] = arrayMatch;
+                        const varNames = vars.split(',').map(v => v.trim());
+                        const value = eval(`with (sequentialScope) { (${expr}) }`);
+                        if (Array.isArray(value)) {
+                            varNames.forEach((varName, i) => {
+                                target[varName] = value[i];
+                                setInThisPass.add(varName);
+                            });
+                        }
+                        return;
+                    }
+                    
+                    // Handle object destructuring: {a, b} = expr
+                    const objMatch = stmt.match(/^\{([^}]+)\}\s*=\s*(.+)$/);
+                    if (objMatch) {
+                        const [, vars, expr] = objMatch;
+                        const varNames = vars.split(',').map(v => v.trim());
+                        const value = eval(`with (sequentialScope) { (${expr}) }`);
+                        if (typeof value === 'object' && value !== null) {
+                            varNames.forEach(varName => {
+                                target[varName] = value[varName];
+                                setInThisPass.add(varName);
+                            });
+                        }
+                        return;
+                    }
+                    
+                    // Regular variable assignment
                     const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
                     if (match) {
                         const [, varName, expr] = match;

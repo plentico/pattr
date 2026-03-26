@@ -16,6 +16,11 @@
         <h1 p-html:allow.strong.em:trim.18="title"></h1>
         <span class="allow-strong" p-html:trim.7:allow.strong="text">some<strong>thi...</strong></span>
         <span class="allow-strong-and-em" p-html:trim.7:allow.em.strong="text"><em>some<strong>thi...</strong></em></span>
+        <div p-scope="[one, two, three] = ['destructuring', 'arrays', 'test'];">
+            <span p-text="one"></span>
+            <span p-text="two"></span>
+            <span p-text="three"></span>
+        </div>
         <hr>
         <div p-attr="{'data-name': name + 'woah'}" p-attr:number="count * 3">Parent Component:</div>
         <button p-on:click="count++">+</button>
