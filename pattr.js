@@ -799,8 +799,31 @@ window.Pattr = {
     getTemplateScopePrefix(template) {
         let ancestorKey = '';
         
-        // First, check if this template has _forTemplate set (meaning it was rendered by an outer loop)
-        // This is the most reliable indicator for nested templates
+        // First, check if SSR elements exist after this template
+        // If so, extract the scope ID from them to maintain continuity
+        let nextSibling = template.nextElementSibling;
+        if (nextSibling && nextSibling.hasAttribute && nextSibling.hasAttribute('p-for-key')) {
+            const ssrKey = nextSibling.getAttribute('p-for-key');
+            // Extract scope prefix from SSR element (e.g., "s4:0" -> "s4:")
+            const colonIndex = ssrKey.lastIndexOf(':');
+            if (colonIndex > 0) {
+                const ssrScopePrefix = ssrKey.substring(0, colonIndex + 1);
+                // Extract just the scope ID part (e.g., "s4:" or "s3:0-s4:")
+                const lastDashIndex = ssrScopePrefix.lastIndexOf('-');
+                if (lastDashIndex >= 0) {
+                    // Has ancestor prefix, extract both parts
+                    ancestorKey = ssrScopePrefix.substring(0, lastDashIndex + 1);
+                    const scopeId = ssrScopePrefix.substring(lastDashIndex + 1, ssrScopePrefix.length - 1);
+                    template._forScopeId = scopeId;
+                } else {
+                    // No ancestor prefix, just scope ID
+                    template._forScopeId = ssrScopePrefix.substring(0, ssrScopePrefix.length - 1);
+                }
+                return ssrScopePrefix;
+            }
+        }
+        
+        // Check if this template has _forTemplate set (meaning it was rendered by an outer loop)
         if (template._forTemplate) {
             const parentForData = template._forTemplate._forData;
             if (parentForData && parentForData.scopePrefix) {
@@ -834,7 +857,7 @@ window.Pattr = {
             }
         }
         
-        // Also check parent elements for p-for-key
+        // Check parent elements for p-for-key
         if (!ancestorKey) {
             let parent = template.parentElement;
             while (parent) {
@@ -857,7 +880,7 @@ window.Pattr = {
             }
         }
         
-        // Generate a unique scope ID for this template
+        // Generate a unique scope ID for this template if not already set from SSR
         if (!template._forScopeId) {
             template._forScopeId = 's' + (this._templateScopeCounter++);
         }
