@@ -674,6 +674,7 @@ window.Pattr = {
                 const event = attr.name.replace('p-on:', '');
                 el.addEventListener(event, () => {
                     eval(`with (el._scope) { ${attr.value} }`);
+                    this.walkDom(this.root, this.data, false);
                     this.refreshAllLoops();
                 });
             }

@@ -193,4 +193,34 @@ test.describe('p-for directive', () => {
     // Ralph should now be RalphRh
     await expect(getByLoopIndex(catsList, 0)).toContainText('RalphRh');
   });
+
+  test('array modification in loop updates p-model outside loop', async ({ page }) => {
+    const toggleButton = page.locator('button:has(span[p-show])');
+    const catsList = page.locator('.cats-list');
+    const catsInput = page.locator('input[p-model="cats"]').first();
+
+    // Show cats
+    await toggleButton.click();
+
+    // Initial value should be the array joined with commas
+    await expect(catsInput).toHaveValue('Ralph, Betsy, Drago');
+
+    // Click ! on Ralph to modify the array
+    const ralphRow = getByLoopIndex(catsList, 0);
+    await ralphRow.locator('button:has-text("!")').click();
+
+    // The p-model input should update immediately
+    await expect(catsInput).toHaveValue('Ralph!, Betsy, Drago');
+
+    // Click + to duplicate last character (Ralph! -> Ralph!!)
+    // Note: Need to re-get the row since the loop re-rendered
+    const ralphRow2 = getByLoopIndex(catsList, 0);
+    await ralphRow2.locator('button:has-text("+")').click();
+    await expect(catsInput).toHaveValue('Ralph!!, Betsy, Drago');
+
+    // Click - to remove last character (Ralph!! -> Ralph!)
+    const ralphRow3 = getByLoopIndex(catsList, 0);
+    await ralphRow3.locator('button:has-text("-")').click();
+    await expect(catsInput).toHaveValue('Ralph!, Betsy, Drago');
+  });
 });
