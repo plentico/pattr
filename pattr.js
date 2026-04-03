@@ -391,22 +391,36 @@ window.Pattr = {
     initScope(el, parentScope) {
         const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
         const localRawData = parentScope._p_target._p_children[dataId];
-        const pScopeExpr = localRawData._p_scope;
         
-        // Check for :sync modifier
-        const pScopeAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope'));
-        const parsed = this.parseDirectiveModifiers(pScopeAttr?.name || 'p-scope');
-        const isSync = parsed.modifiers.sync !== undefined;
+        // Check for both p-scope and p-scope:sync on the same element
+        const pScopeAttr = el.getAttribute('p-scope');
+        const pScopeSyncAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope') && attr.name.includes('sync'));
         
-        // Get output variables for sync
-        const outputVars = isSync ? this.getPScopeOutputVars(pScopeExpr) : [];
+        // Collect all scope expressions and sync variables
+        let allExprs = [];
+        let syncVars = [];
+        
+        if (pScopeAttr) {
+            // Regular p-scope (not synced)
+            allExprs.push(pScopeAttr);
+        }
+        
+        if (pScopeSyncAttr) {
+            // p-scope:sync - these variables are synced
+            const syncExpr = el.getAttribute(pScopeSyncAttr.name);
+            allExprs.push(syncExpr);
+            syncVars = this.getPScopeOutputVars(syncExpr);
+        }
+        
+        // Combine all expressions
+        const pScopeExpr = allExprs.join('; ');
         
         // Create new inherited Proxy with sync configuration
-        const scope = this.observe(localRawData, parentScope, outputVars);
+        const scope = this.observe(localRawData, parentScope, syncVars);
         
         // Store sync info on element for later use
-        if (isSync) {
-            el._p_syncVars = new Set(outputVars);
+        if (syncVars.length > 0) {
+            el._p_syncVars = new Set(syncVars);
         }
         
         // Execute p-scope assignments directly on target to avoid triggering setter

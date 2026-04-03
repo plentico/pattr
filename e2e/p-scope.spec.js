@@ -191,6 +191,21 @@ test.describe('p-scope directive', () => {
     await expect(parentNameDisplay).toHaveText('Alicecool');
   });
 
+  test('local scope variable (name2) does not propagate to parent', async ({ page }) => {
+    const syncedSection = page.locator('#synced-scope');
+    const name2Input = syncedSection.locator('input[p-model="name2"]');
+    const parentName2Display = page.locator('div').filter({ hasText: /Other name is:/ }).first();
+
+    // Initial: name2 = Ted
+    await expect(parentName2Display).toContainText('Ted');
+
+    // Change name2 in synced scope (should stay local since it's from p-scope, not p-scope:sync)
+    await name2Input.fill('Changed');
+
+    // Parent name2 should still be Ted (not synced)
+    await expect(parentName2Display).toContainText('Ted');
+  });
+
   test('sync scope decrement also updates parent', async ({ page }) => {
     const syncedSection = page.locator('#synced-scope');
     const syncedCountDisplay = syncedSection.locator('[p-text]').first();

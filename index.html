@@ -7,6 +7,7 @@
             {
                 "title": "This is <strong><em>Pattr</em></strong><iframe src='https://plenti.co' />. And it's really cool!",
                 "name": "Bob",
+                "name2": "Ted",
                 "text": "<em>some<strong>thing</strong></em>",
                 "count": 2
             }
@@ -27,6 +28,7 @@
         <button p-on:click="count--">-</button>
         <input type="number" p-model="count" />
         <div p-text:trim.25="`${name} can count to: ${count}`"></div>
+        <div p-text="`Other name is: ${name2}`"></div>
         <div 
             id="class-test"
             class="static-class highlight"
@@ -59,12 +61,13 @@
             <button p-on:click="count--">-</button>
             <hr>
         </section>
-        <section id="synced-scope" p-scope:sync="count = count; name = name;">
+        <section id="synced-scope" p-scope="name2 = name2;" p-scope:sync="count = count; name = name;">
             <div>Sync'd Component (count):</div>
             <div p-text="`Count: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <input type="text" p-model="name" />
+            <input type="text" p-model="name2" />
             <hr>
         </section>
         <section id="child-scope" p-scope="count = count * 2; name = name + 'o';">
