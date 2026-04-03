@@ -221,6 +221,32 @@ test.describe('p-scope directive', () => {
     await expect(catsList).toContainText('Drago');
   });
 
+  test('deep sync - content object property updates propagate to parent', async ({ page }) => {
+    // This test verifies that modifying a property on a synced object
+    // updates the corresponding parent scope variable
+    const syncedSection = page.locator('#synced-scope');
+    const pathInput = syncedSection.locator('input[p-model="content.path"]');
+    const titleInput = syncedSection.locator('input[p-model="content.title"]');
+    const parentPathDisplay = page.locator('div').filter({ hasText: /Path:/ }).first();
+    const parentTitleDisplay = page.locator('div').filter({ hasText: /Title:/ }).first();
+    
+    // Initial: content.path = /test, content.title = My page
+    await expect(parentPathDisplay).toContainText('/test');
+    await expect(parentTitleDisplay).toContainText('My page');
+    
+    // Update content.path in synced scope - this tests deep sync
+    await pathInput.fill('/updated-path');
+    
+    // Parent path should update
+    await expect(parentPathDisplay).toContainText('/updated-path');
+    
+    // Update content.title in synced scope
+    await titleInput.fill('Updated Title');
+    
+    // Parent title should update
+    await expect(parentTitleDisplay).toContainText('Updated Title');
+  });
+
   test('sync scope decrement also updates parent', async ({ page }) => {
     const syncedSection = page.locator('#synced-scope');
     const syncedCountDisplay = syncedSection.locator('[p-text]').first();

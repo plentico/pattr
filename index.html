@@ -9,6 +9,7 @@
                 "name": "Bob",
                 "name2": "Ted",
                 "text": "<em>some<strong>thing</strong></em>",
+                "content": {"path": "/test", "title": "My page"},
                 "count": 2
             }
         </script>
@@ -22,13 +23,15 @@
             <span p-text="two"></span>
             <span p-text="three"></span>
         </div>
+        <div p-text="`Other name is: ${name2}`"></div>
+        <div p-text="`Path: ${content.path}`"></div>
+        <div p-text="`Title: ${content.title}`"></div>
         <hr>
         <div p-attr="{'data-name': name + 'woah'}" p-attr:number="count * 3">Parent Component:</div>
         <button p-on:click="count++">+</button>
         <button p-on:click="count--">-</button>
         <input type="number" p-model="count" />
         <div p-text:trim.25="`${name} can count to: ${count}`"></div>
-        <div p-text="`Other name is: ${name2}`"></div>
         <div 
             id="class-test"
             class="static-class highlight"
@@ -61,13 +64,15 @@
             <button p-on:click="count--">-</button>
             <hr>
         </section>
-        <section id="synced-scope" p-scope="name2 = name2;" p-scope:sync="count = count; name = name;">
+        <section id="synced-scope" p-scope="name2 = name2;" p-scope:sync="count = count; name = name; content = content;">
             <div>Sync'd Component (count):</div>
             <div p-text="`Count: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <input type="text" p-model="name" />
             <input type="text" p-model="name2" />
+            <input type="text" p-model="content.path" />
+            <input type="text" p-model="content.title" />
             <hr>
         </section>
         <section id="child-scope" p-scope="count = count * 2; name = name + 'o';">

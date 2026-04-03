@@ -324,6 +324,91 @@ window.Pattr = {
         const syncVarsSet = new Set(syncVars);
         const parentTarget = parentScope?._p_target || parentScope;
         
+        // Track which objects have been wrapped to avoid infinite recursion
+        const wrappedObjects = new WeakSet();
+        
+        const createDeepProxy = (obj, isSynced = false) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            
+            // Avoid re-wrapping the same object
+            if (wrappedObjects.has(obj)) {
+                return obj;
+            }
+            
+            // Don't wrap primitive wrappers, dates, regexes, etc.
+            if (obj instanceof Date || obj instanceof RegExp || obj instanceof Map || obj instanceof Set) {
+                return obj;
+            }
+            
+            // Create wrapper that intercepts get/set on properties
+            const wrapper = new Proxy(obj, {
+                get: (target, key) => {
+                    if (key === '_p_target') {
+                        return target;
+                    }
+                    if (key === '_p_syncParent') {
+                        return parentTarget;
+                    }
+                    
+                    const value = target[key];
+                    
+                    // For synced objects, wrap nested objects too
+                    if (isSynced && value !== null && typeof value === 'object') {
+                        return createDeepProxy(value, true);
+                    }
+                    
+                    return value;
+                },
+                set: (target, key, value) => {
+                    target[key] = value;
+                    
+                    // If this is a synced object, propagate to parent
+                    if (isSynced && parentTarget) {
+                        // Try to find the corresponding parent object
+                        // and set the property there too
+                        for (const [parentKey, parentVal] of Object.entries(parentTarget)) {
+                            if (parentVal === target || (parentVal && parentVal._p_target === target)) {
+                                if (parentVal && typeof parentVal === 'object' && key in parentVal) {
+                                    parentVal[key] = value;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    this.walkDom(this.root, this.data, false);
+                    return true;
+                },
+                has: (target, key) => {
+                    return key in target;
+                }
+            });
+            
+            wrappedObjects.add(obj);
+            return wrapper;
+        };
+        
+        // Wrap synced variables with deep proxies
+        if (parentTarget) {
+            for (const syncVar of syncVarsSet) {
+                if (syncVar in proxyTarget) {
+                    const value = proxyTarget[syncVar];
+                    if (value !== null && typeof value === 'object') {
+                        proxyTarget[syncVar] = createDeepProxy(value, true);
+                    }
+                }
+                // Also wrap the parent's synced object
+                if (syncVar in parentTarget) {
+                    const parentValue = parentTarget[syncVar];
+                    if (parentValue !== null && typeof parentValue === 'object') {
+                        parentTarget[syncVar] = createDeepProxy(parentValue, true);
+                    }
+                }
+            }
+        }
+        
         const proxy = new Proxy(proxyTarget, {
             get: (target, key) => {
                 if (key === '_p_target') {
@@ -332,6 +417,11 @@ window.Pattr = {
                 return target[key];
             },
             set: (target, key, value) => {
+                // If setting a synced object, wrap it
+                if (syncVarsSet.has(key) && value !== null && typeof value === 'object') {
+                    value = createDeepProxy(value, true);
+                }
+                
                 target[key] = value;
                 
                 // If this is a synced variable, also update the parent scope
