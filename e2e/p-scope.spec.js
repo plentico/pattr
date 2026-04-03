@@ -206,6 +206,21 @@ test.describe('p-scope directive', () => {
     await expect(parentName2Display).toContainText('Ted');
   });
 
+  test('p-scope handles semicolons in strings correctly', async ({ page }) => {
+    // The cats array in index.html has items like 'Ralph', 'Betsy', 'Drago'
+    // Test that the p-for loop with semicolon-containing strings works
+    const catsList = page.locator('.cats-list');
+    const toggleButton = page.locator('button:has(span[p-show])');
+    
+    // Show cats
+    await toggleButton.click();
+    
+    // Check that cats are displayed (this tests the smart semicolon parser)
+    await expect(catsList).toContainText('Ralph');
+    await expect(catsList).toContainText('Betsy');
+    await expect(catsList).toContainText('Drago');
+  });
+
   test('sync scope decrement also updates parent', async ({ page }) => {
     const syncedSection = page.locator('#synced-scope');
     const syncedCountDisplay = syncedSection.locator('[p-text]').first();

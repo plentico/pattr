@@ -352,11 +352,64 @@ window.Pattr = {
     // ==================== SCOPE MANAGEMENT ====================
 
     /**
+     * Splits p-scope expression into statements, respecting braces and parentheses
+     */
+    splitPScopeStatements(pScopeExpr) {
+        const statements = [];
+        let current = '';
+        let braceDepth = 0;
+        let parenDepth = 0;
+        let inString = false;
+        let stringChar = null;
+        
+        for (let i = 0; i < pScopeExpr.length; i++) {
+            const char = pScopeExpr[i];
+            const prevChar = i > 0 ? pScopeExpr[i - 1] : null;
+            
+            // Handle string boundaries
+            if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+                if (!inString) {
+                    inString = true;
+                    stringChar = char;
+                } else if (stringChar === char) {
+                    inString = false;
+                    stringChar = null;
+                }
+            }
+            
+            // Track brace/paren depth (only when not in string)
+            if (!inString) {
+                if (char === '{') braceDepth++;
+                else if (char === '}') braceDepth--;
+                else if (char === '(') parenDepth++;
+                else if (char === ')') parenDepth--;
+            }
+            
+            // Split on semicolon only at top level
+            if (char === ';' && !inString && braceDepth === 0 && parenDepth === 0) {
+                if (current.trim()) {
+                    statements.push(current.trim());
+                }
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        // Don't forget the last statement
+        if (current.trim()) {
+            statements.push(current.trim());
+        }
+        
+        return statements;
+    },
+
+    /**
      * Parses p-scope expression to identify output variables (those being assigned)
      */
     getPScopeOutputVars(pScopeExpr) {
         const outputVars = [];
-        const statements = pScopeExpr.split(';').map(s => s.trim()).filter(s => s);
+        const statements = this.splitPScopeStatements(pScopeExpr);
         
         statements.forEach(stmt => {
             // Array destructuring: [a, b] = expr
@@ -474,7 +527,7 @@ window.Pattr = {
      * Each statement sees the results of previous statements
      */
     executePScopeStatements(scope, pScopeExpr) {
-        const statements = pScopeExpr.split(';').map(s => s.trim()).filter(s => s);
+        const statements = this.splitPScopeStatements(pScopeExpr);
         const target = scope._p_target;
         
         // Create a sequential scope that always reads from target first (for updated values)
@@ -588,7 +641,7 @@ window.Pattr = {
         if (allChangedVars.size === 0) return;
         
         try {
-            const statements = pScopeExpr.split(';').map(s => s.trim()).filter(s => s);
+            const statements = this.splitPScopeStatements(pScopeExpr);
             
             // Identify OUTPUT variables (variables SET by p-scope statements)
             // Local changes to these should NOT trigger re-execution
