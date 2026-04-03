@@ -288,7 +288,9 @@ window.Pattr = {
 
     buildScopeData(el, parentData) {
         let currentData = parentData;
-        if (el.hasAttribute('p-scope')) {
+        // Check for p-scope attribute (with or without modifiers like p-scope:sync)
+        const pScopeAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope'));
+        if (pScopeAttr) {
             // Use explicit p-id if provided, otherwise generate from DOM position
             const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
             if (!parentData._p_children) {
@@ -298,7 +300,7 @@ window.Pattr = {
                 parentData._p_children[dataId] = {};
             }
             currentData = parentData._p_children[dataId]; 
-            currentData._p_scope = el.getAttribute('p-scope');
+            currentData._p_scope = el.getAttribute(pScopeAttr.name);
             // Store the ID for later use
             currentData._p_id = dataId;
         }
@@ -311,13 +313,17 @@ window.Pattr = {
 
     // ==================== REACTIVE PROXY ====================
 
-    observe(data, parentScope) {
+    observe(data, parentScope, syncVars = []) {
         const localTarget = data;
         let proxyTarget = localTarget;
         if (parentScope) {
             proxyTarget = Object.create(parentScope._p_target || parentScope);
             Object.assign(proxyTarget, localTarget);
         }
+        
+        const syncVarsSet = new Set(syncVars);
+        const parentTarget = parentScope?._p_target || parentScope;
+        
         const proxy = new Proxy(proxyTarget, {
             get: (target, key) => {
                 if (key === '_p_target') {
@@ -327,6 +333,12 @@ window.Pattr = {
             },
             set: (target, key, value) => {
                 target[key] = value;
+                
+                // If this is a synced variable, also update the parent scope
+                if (syncVarsSet.has(key) && parentTarget && key in parentTarget) {
+                    parentTarget[key] = value;
+                }
+                
                 this.walkDom(this.root, this.data, false);
                 return true;
             },
@@ -340,17 +352,65 @@ window.Pattr = {
     // ==================== SCOPE MANAGEMENT ====================
 
     /**
+     * Parses p-scope expression to identify output variables (those being assigned)
+     */
+    getPScopeOutputVars(pScopeExpr) {
+        const outputVars = [];
+        const statements = pScopeExpr.split(';').map(s => s.trim()).filter(s => s);
+        
+        statements.forEach(stmt => {
+            // Array destructuring: [a, b] = expr
+            const arrayMatch = stmt.match(/^\[([^\]]+)\]\s*=\s*(.+)$/);
+            if (arrayMatch) {
+                const vars = arrayMatch[1].split(',').map(v => v.trim());
+                outputVars.push(...vars);
+                return;
+            }
+            
+            // Object destructuring: {a, b} = expr
+            const objMatch = stmt.match(/^\{([^}]+)\}\s*=\s*(.+)$/);
+            if (objMatch) {
+                const vars = objMatch[1].split(',').map(v => v.trim());
+                outputVars.push(...vars);
+                return;
+            }
+            
+            // Regular variable assignment: var = expr
+            const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
+            if (match) {
+                outputVars.push(match[1]);
+            }
+        });
+        
+        return outputVars;
+    },
+
+    /**
      * Creates a new scope for an element with p-scope during hydration
      */
     initScope(el, parentScope) {
         const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
         const localRawData = parentScope._p_target._p_children[dataId];
+        const pScopeExpr = localRawData._p_scope;
         
-        // Create new inherited Proxy
-        const scope = this.observe(localRawData, parentScope);
+        // Check for :sync modifier
+        const pScopeAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope'));
+        const parsed = this.parseDirectiveModifiers(pScopeAttr?.name || 'p-scope');
+        const isSync = parsed.modifiers.sync !== undefined;
+        
+        // Get output variables for sync
+        const outputVars = isSync ? this.getPScopeOutputVars(pScopeExpr) : [];
+        
+        // Create new inherited Proxy with sync configuration
+        const scope = this.observe(localRawData, parentScope, outputVars);
+        
+        // Store sync info on element for later use
+        if (isSync) {
+            el._p_syncVars = new Set(outputVars);
+        }
         
         // Execute p-scope assignments directly on target to avoid triggering setter
-        this.executePScopeStatements(scope, localRawData._p_scope);
+        this.executePScopeStatements(scope, pScopeExpr);
         
         // Initialize parent snapshot so first refresh doesn't think everything changed
         const parentProto = Object.getPrototypeOf(scope._p_target);
@@ -383,8 +443,11 @@ window.Pattr = {
             return parentScope;
         }
         
+        // Find the p-scope attribute (with or without modifiers)
+        const pScopeAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope'));
+        const pScopeExpr = pScopeAttr ? el.getAttribute(pScopeAttr.name) : null;
+        
         // Check if parent values changed - if so, selectively re-execute p-scope
-        const pScopeExpr = el.getAttribute('p-scope');
         if (pScopeExpr && scope._p_target) {
             this.updateScopeFromParent(el, scope, pScopeExpr);
         }
@@ -1173,7 +1236,9 @@ window.Pattr = {
         // Determine the scope for this element
         let currentScope = parentScope;
         
-        if (el.hasAttribute('p-scope')) {
+        // Check for p-scope attribute (with or without modifiers like p-scope:sync)
+        const hasPScope = Array.from(el.attributes).some(attr => attr.name.startsWith('p-scope'));
+        if (hasPScope) {
             if (isHydrating) {
                 currentScope = this.initScope(el, parentScope);
             } else {

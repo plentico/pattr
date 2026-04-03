@@ -151,4 +151,79 @@ test.describe('p-scope directive', () => {
     await minusButton.click();
     await expect(countDisplay).toContainText('3');
   });
+
+  // Sync Scope Tests
+  test('sync scope propagates count changes to parent', async ({ page }) => {
+    const syncedSection = page.locator('#synced-scope');
+    const syncedCountDisplay = syncedSection.locator('[p-text]').first();
+    const syncedPlusButton = syncedSection.locator('button').first();
+    // Use parent section to get parent count display
+    const parentSection = page.locator('body');
+    const parentCountDisplay = parentSection.locator('div').filter({ hasText: /can count to:/ }).first();
+
+    // Initial: Parent count = 2
+    await expect(parentCountDisplay).toContainText('2');
+    await expect(syncedCountDisplay).toContainText('2');
+
+    // Click + in synced scope - should update both synced and parent
+    await syncedPlusButton.click();
+    await expect(syncedCountDisplay).toContainText('3');
+    await expect(parentCountDisplay).toContainText('3');
+
+    // Click + again
+    await syncedPlusButton.click();
+    await expect(syncedCountDisplay).toContainText('4');
+    await expect(parentCountDisplay).toContainText('4');
+  });
+
+  test('sync scope propagates name changes to parent via p-model', async ({ page }) => {
+    const syncedSection = page.locator('#synced-scope');
+    const syncedNameInput = syncedSection.locator('input[p-model="name"]');
+    const parentNameDisplay = page.locator('span[p-text="coolname"]');
+
+    // Initial: name = Bob, coolname = Bobcool
+    await expect(parentNameDisplay).toHaveText('Bobcool');
+
+    // Change name in synced scope input
+    await syncedNameInput.fill('Alice');
+
+    // Parent coolname should update (name + 'cool')
+    await expect(parentNameDisplay).toHaveText('Alicecool');
+  });
+
+  test('sync scope decrement also updates parent', async ({ page }) => {
+    const syncedSection = page.locator('#synced-scope');
+    const syncedCountDisplay = syncedSection.locator('[p-text]').first();
+    const syncedMinusButton = syncedSection.locator('button').nth(1);
+    // Use parent section to get parent count display
+    const parentSection = page.locator('body');
+    const parentCountDisplay = parentSection.locator('div').filter({ hasText: /can count to:/ }).first();
+
+    // Initial: Parent count = 2
+    await expect(parentCountDisplay).toContainText('2');
+    await expect(syncedCountDisplay).toContainText('2');
+
+    // Click - in synced scope
+    await syncedMinusButton.click();
+    await expect(syncedCountDisplay).toContainText('1');
+    await expect(parentCountDisplay).toContainText('1');
+  });
+
+  test('non-sync scope does not propagate to parent', async ({ page }) => {
+    const childSection = page.locator('#child-scope');
+    const childCountDisplay = childSection.locator('[p-text]').first();
+    const childPlusButton = childSection.locator('button').first();
+    // Use parent section to get parent count display
+    const parentSection = page.locator('body');
+    const parentCountDisplay = parentSection.locator('div').filter({ hasText: /can count to:/ }).first();
+
+    // Initial: Parent count = 2, Child count = 4 (2 * 2)
+    await expect(parentCountDisplay).toContainText('2');
+    await expect(childCountDisplay).toContainText('4');
+
+    // Click + in child scope (non-sync) - only child updates
+    await childPlusButton.click();
+    await expect(childCountDisplay).toContainText('5');
+    await expect(parentCountDisplay).toContainText('2'); // Parent unchanged
+  });
 });

@@ -359,6 +359,38 @@ Pattr supports hydrating server-side rendered loops. Add `p-for-key` attributes 
 
 Modifiers extend directive functionality using colon syntax:
 
+### Sync Scope (2-Way Binding)
+
+Use `:sync` with `p-scope` to enable bidirectional data flow between parent and child scopes. Changes to local variables propagate back to the parent:
+
+```html
+<div>
+    Parent count: <span p-text="count"></span>
+    <button p-on:click="count++">+</button>
+</div>
+
+<!-- With :sync, changes to childCount update parent count too -->
+<section p-scope:sync="childCount = count">
+    <div>Synced count: <span p-text="childCount"></span></div>
+    <button p-on:click="childCount++">+ (updates parent)</button>
+</section>
+
+<!-- Without :sync (default), changes stay local -->
+<section p-scope="localCount = count">
+    <div>Local count: <span p-text="localCount"></span></div>
+    <button p-on:click="localCount++">+ (stays local)</button>
+</section>
+```
+
+Works with multiple variables and computed expressions:
+
+```html
+<section p-scope:sync="x = a; y = b * 2">
+    <input p-model="x" /> <!-- Updates parent 'a' -->
+    <input p-model="y" /> <!-- Updates parent 'b' -->
+</section>
+```
+
 ### Trim Text
 
 Limit text length and add ellipsis:

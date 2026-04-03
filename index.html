@@ -59,6 +59,14 @@
             <button p-on:click="count--">-</button>
             <hr>
         </section>
+        <section id="synced-scope" p-scope:sync="count = count; name = name;">
+            <div>Sync'd Component (count):</div>
+            <div p-text="`Count: ${count}`"></div>
+            <button p-on:click="count++">+</button>
+            <button p-on:click="count--">-</button>
+            <input type="text" p-model="name" />
+            <hr>
+        </section>
         <section id="child-scope" p-scope="count = count * 2; name = name + 'o';">
             <div>Child Component (count *2):</div>
             <div p-text="`${name} can count to: ${count}`"></div>
