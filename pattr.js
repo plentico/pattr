@@ -327,7 +327,7 @@ window.Pattr = {
         // Track which objects have been wrapped to avoid infinite recursion
         const wrappedObjects = new WeakSet();
         
-        const createDeepProxy = (obj, isSynced = false) => {
+        const createDeepProxy = (obj, isSynced = false, syncKey = null) => {
             if (obj === null || typeof obj !== 'object') {
                 return obj;
             }
@@ -351,12 +351,15 @@ window.Pattr = {
                     if (key === '_p_syncParent') {
                         return parentTarget;
                     }
+                    if (key === '_p_syncKey') {
+                        return syncKey;
+                    }
                     
                     const value = target[key];
                     
                     // For synced objects, wrap nested objects too
                     if (isSynced && value !== null && typeof value === 'object') {
-                        return createDeepProxy(value, true);
+                        return createDeepProxy(value, true, syncKey);
                     }
                     
                     return value;
@@ -365,16 +368,10 @@ window.Pattr = {
                     target[key] = value;
                     
                     // If this is a synced object, propagate to parent
-                    if (isSynced && parentTarget) {
-                        // Try to find the corresponding parent object
-                        // and set the property there too
-                        for (const [parentKey, parentVal] of Object.entries(parentTarget)) {
-                            if (parentVal === target || (parentVal && parentVal._p_target === target)) {
-                                if (parentVal && typeof parentVal === 'object' && key in parentVal) {
-                                    parentVal[key] = value;
-                                }
-                                break;
-                            }
+                    if (isSynced && parentTarget && syncKey) {
+                        const parentVal = parentTarget[syncKey];
+                        if (parentVal && typeof parentVal === 'object') {
+                            parentVal[key] = value;
                         }
                     }
                     
@@ -419,7 +416,7 @@ window.Pattr = {
             set: (target, key, value) => {
                 // If setting a synced object, wrap it
                 if (syncVarsSet.has(key) && value !== null && typeof value === 'object') {
-                    value = createDeepProxy(value, true);
+                    value = createDeepProxy(value, true, key);
                 }
                 
                 target[key] = value;
@@ -600,9 +597,22 @@ window.Pattr = {
             return parentScope;
         }
         
-        // Find the p-scope attribute (with or without modifiers)
-        const pScopeAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope'));
-        const pScopeExpr = pScopeAttr ? el.getAttribute(pScopeAttr.name) : null;
+        // Check for both p-scope and p-scope:sync on the same element
+        const pScopeAttr = el.getAttribute('p-scope');
+        const pScopeSyncAttr = Array.from(el.attributes).find(attr => attr.name.startsWith('p-scope') && attr.name.includes('sync'));
+        
+        // Collect all scope expressions (just like in initScope)
+        let allExprs = [];
+        
+        if (pScopeAttr) {
+            allExprs.push(pScopeAttr);
+        }
+        
+        if (pScopeSyncAttr) {
+            allExprs.push(el.getAttribute(pScopeSyncAttr.name));
+        }
+        
+        const pScopeExpr = allExprs.join('; ');
         
         // Check if parent values changed - if so, selectively re-execute p-scope
         if (pScopeExpr && scope._p_target) {

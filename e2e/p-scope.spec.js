@@ -191,6 +191,24 @@ test.describe('p-scope directive', () => {
     await expect(parentNameDisplay).toHaveText('Alicecool');
   });
 
+  test('parent name change updates synced child scope', async ({ page }) => {
+    const parentNameInput = page.locator('input[p-model="name"]').first();
+    const syncedSection = page.locator('#synced-scope');
+    const syncedNameInput = syncedSection.locator('input[p-model="name"]');
+
+    // Initial: name = Bob
+    await expect(syncedNameInput).toHaveValue('Bob');
+
+    // Change name in parent scope
+    await parentNameInput.fill('Charlie');
+    
+    // Wait a bit for updates
+    await page.waitForTimeout(100);
+
+    // Synced scope should update
+    await expect(syncedNameInput).toHaveValue('Charlie');
+  });
+
   test('local scope variable (name2) does not propagate to parent', async ({ page }) => {
     const syncedSection = page.locator('#synced-scope');
     const name2Input = syncedSection.locator('input[p-model="name2"]');
