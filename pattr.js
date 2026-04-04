@@ -977,8 +977,22 @@ window.Pattr = {
                     scope[modelAttr] = value;  // Set on Proxy to trigger reactivity
                 }
                 
+                // Track the input element to restore focus after re-render
+                // The p-for-key is on the parent div in p-for loops
+                const pForKey = el.getAttribute('p-for-key') || el.parentElement?.getAttribute('p-for-key');
+                
                 // Re-render DOM to reflect changes
                 this.walkDom(this.root, this.data, false);
+                
+                // Restore focus after DOM update using p-for-key
+                if (pForKey) {
+                    requestAnimationFrame(() => {
+                        const elementToFocus = document.querySelector(`[p-for-key="${pForKey}"] input`);
+                        if (elementToFocus) {
+                            elementToFocus.focus();
+                        }
+                    });
+                }
             }
         });
         

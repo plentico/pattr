@@ -326,4 +326,26 @@ test.describe('p-scope directive', () => {
     await expect(firstInput).toHaveValue('/new-path');
     await expect(displaySpan).toContainText('path: /new-path');
   });
+
+  test('p-model input keeps focus after typing in p-for loop', async ({ page }) => {
+    // Test that focus is preserved when typing in p-for loop inputs
+    const bracketInputs = page.locator('input[p-model="content[key]"]');
+    const firstInput = bracketInputs.first();
+    
+    // Click to focus the input
+    await firstInput.click();
+    
+    // Verify input is focused
+    await expect(firstInput).toBeFocused();
+    
+    // Type a character
+    await firstInput.fill('/test-focus');
+    
+    // Verify input still has focus after re-render
+    // This tests the focus restoration fix
+    await expect(firstInput).toBeFocused();
+    
+    // Verify the value was updated
+    await expect(firstInput).toHaveValue('/test-focus');
+  });
 });
