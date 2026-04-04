@@ -978,18 +978,37 @@ window.Pattr = {
                 }
                 
                 // Track the input element to restore focus after re-render
-                // The p-for-key is on the parent div in p-for loops
-                const pForKey = el.getAttribute('p-for-key') || el.parentElement?.getAttribute('p-for-key');
+                // Get p-for-key from element or its parent
+                let pForKey = el.getAttribute('p-for-key');
+                let container = el;
+                if (!pForKey) {
+                    container = el.parentElement;
+                    while (container && !pForKey) {
+                        pForKey = container.getAttribute('p-for-key');
+                        if (!pForKey) container = container.parentElement;
+                    }
+                }
+                
+                // Store the p-model value to identify this specific input
+                const modelAttrValue = el.getAttribute('p-model');
+                const inputTagName = el.tagName;
+                const inputType = el.type;
                 
                 // Re-render DOM to reflect changes
                 this.walkDom(this.root, this.data, false);
                 
-                // Restore focus after DOM update using p-for-key
-                if (pForKey) {
+                // Restore focus after DOM update (only for inputs in p-for loops)
+                // Non-loop inputs don't need focus restoration as they're not recreated
+                if (pForKey && modelAttrValue) {
                     requestAnimationFrame(() => {
-                        const elementToFocus = document.querySelector(`[p-for-key="${pForKey}"] input`);
-                        if (elementToFocus) {
-                            elementToFocus.focus();
+                        // Find the container with p-for-key, then find input with matching p-model
+                        const containerEl = document.querySelector(`[p-for-key="${pForKey}"]`);
+                        if (containerEl) {
+                            // Look for input with same p-model attribute
+                            const elementToFocus = containerEl.querySelector(`${inputTagName.toLowerCase()}[p-model="${modelAttrValue}"]`);
+                            if (elementToFocus) {
+                                elementToFocus.focus();
+                            }
                         }
                     });
                 }
