@@ -300,4 +300,30 @@ test.describe('p-scope directive', () => {
     await expect(childCountDisplay).toContainText('5');
     await expect(parentCountDisplay).toContainText('2'); // Parent unchanged
   });
+
+  test('p-model with bracket notation in p-for loop updates object property', async ({ page }) => {
+    // Test p-model="content[key]" inside a p-for loop
+    // The index.html has: <template p-for="[key, value] in Object.entries(content)">
+    //                      <input type="text" p-model="content[key]" />
+    //                      <span p-text="`${key}: ${content[key]}`"></span>
+    
+    // Get the first input that uses bracket notation (path input)
+    const bracketInputs = page.locator('input[p-model="content[key]"]');
+    const firstInput = bracketInputs.first();
+    
+    // Get the display span that shows the value (it displays "path: /test")
+    const displaySpan = page.locator('span').filter({ hasText: 'path:' }).first();
+    
+    // Initial values
+    await expect(firstInput).toHaveValue('/test');
+    await expect(displaySpan).toContainText('path: /test');
+    
+    // Update the input using bracket notation
+    await firstInput.fill('/new-path');
+    
+    // Verify both the input value AND the display span updated
+    // This confirms the data binding actually works (not just native input behavior)
+    await expect(firstInput).toHaveValue('/new-path');
+    await expect(displaySpan).toContainText('path: /new-path');
+  });
 });

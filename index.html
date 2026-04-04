@@ -24,6 +24,12 @@
             <span p-text="three"></span>
         </div>
         <div p-text="`Other name is: ${name2}`"></div>
+        <template p-for="[key, value] in Object.entries(content)">
+        <div class="content-loop-item">
+            <input type="text" p-model="content[key]" />
+            <span p-text="`${key}: ${content[key]}`"></span>
+        </div>
+        </template>
         <div p-text="`Path: ${content.path}`"></div>
         <div p-text="`Title: ${content.title}`"></div>
         <hr>

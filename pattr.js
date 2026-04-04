@@ -365,13 +365,23 @@ window.Pattr = {
                     return value;
                 },
                 set: (target, key, value) => {
+                    // If setting a nested object, wrap it with a deep proxy
+                    if (value !== null && typeof value === 'object') {
+                        value = createDeepProxy(value, isSynced, syncKey);
+                    }
+                    
                     target[key] = value;
                     
                     // If this is a synced object, propagate to parent
                     if (isSynced && parentTarget && syncKey) {
                         const parentVal = parentTarget[syncKey];
                         if (parentVal && typeof parentVal === 'object') {
-                            parentVal[key] = value;
+                            // Also wrap parent's nested object if needed
+                            if (value !== null && typeof value === 'object' && !parentVal[key]._p_isProxy) {
+                                parentVal[key] = createDeepProxy(value, isSynced, syncKey);
+                            } else {
+                                parentVal[key] = value;
+                            }
                         }
                     }
                     
@@ -940,7 +950,35 @@ window.Pattr = {
             }
             
             if (value !== undefined) {
-                eval(`with (el._scope) { ${modelAttr} = value }`);
+                // Set on the scope (Proxy) to trigger reactive updates
+                // This handles cases like content[key] where content is inherited
+                const scope = el._scope;
+                
+                // For bracket notation like content[key], we need to evaluate key first
+                if (modelAttr.includes('[')) {
+                    // Extract the object name and key expression
+                    const match = modelAttr.match(/^(.+)\[(.+)\]$/);
+                    if (match) {
+                        const [, objName, keyExpr] = match;
+                        const key = eval(`with (scope) { ${keyExpr} }`);
+                        scope[objName][key] = value;  // Set on Proxy to trigger reactivity
+                    } else {
+                        eval(`with (scope) { ${modelAttr} = value }`);
+                    }
+                } else if (modelAttr.includes('.')) {
+                    // Handle dot notation like content.path
+                    const parts = modelAttr.split('.');
+                    let obj = scope;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        obj = obj[parts[i]];
+                    }
+                    obj[parts[parts.length - 1]] = value;
+                } else {
+                    scope[modelAttr] = value;  // Set on Proxy to trigger reactivity
+                }
+                
+                // Re-render DOM to reflect changes
+                this.walkDom(this.root, this.data, false);
             }
         });
         
@@ -953,9 +991,26 @@ window.Pattr = {
                 } else {
                     value = e.target.checked ? e.target.value : undefined;
                 }
-                if (value !== undefined) {
-                    eval(`with (el._scope) { ${modelAttr} = value }`);
+            if (value !== undefined) {
+                // Set on the scope (Proxy) to trigger reactive updates
+                // This handles cases like content[key] where content is inherited
+                const scope = el._scope;
+                
+                // For bracket notation like content[key], we need to evaluate key first
+                if (modelAttr.includes('[')) {
+                    // Extract the object name and key expression
+                    const match = modelAttr.match(/^(.+)\[(.+)\]$/);
+                    if (match) {
+                        const [, objName, keyExpr] = match;
+                        const key = eval(`with (scope) { ${keyExpr} }`);
+                        scope[objName][key] = value;  // Set on Proxy to trigger reactivity
+                    } else {
+                        eval(`with (scope) { ${modelAttr} = value }`);
+                    }
+                } else {
+                    scope[modelAttr] = value;  // Set on Proxy to trigger reactivity
                 }
+            }
             });
         }
     },
