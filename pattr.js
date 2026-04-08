@@ -1207,6 +1207,50 @@ window.Pattr = {
         return ancestorKey + template._forScopeId + ':';
     },
 
+    /**
+     * Recursively enriches a template content element with nested p-for templates
+     * found in SSR-rendered elements but missing from the outer template's static content.
+     *
+     * When a template generator (e.g. Pico) emits a nested {for} loop only inside the
+     * SSR-rendered siblings—but NOT inside the outer <template p-for> content—refreshLoop
+     * will re-render from template.content and lose the inner template entirely.
+     * Calling this once per hydrateLoop pass "teaches" the outer template about the inner
+     * template so all future refreshLoop calls reproduce it correctly.
+     */
+    enrichTemplateContent(templateEl, ssrEl) {
+        // Filter out SSR-rendered loop elements (those with p-for-key)
+        const ssrChildren = Array.from(ssrEl.children).filter(
+            c => !c.hasAttribute('p-for-key')
+        );
+        const tplChildren = Array.from(templateEl.children);
+        let ti = 0;
+
+        for (const ssrChild of ssrChildren) {
+            if (ssrChild.tagName === 'TEMPLATE' && ssrChild.hasAttribute('p-for')) {
+                // Check whether the template content already has a matching inner template here
+                const tplChild = tplChildren[ti];
+                const alreadyPresent =
+                    tplChild &&
+                    tplChild.tagName === 'TEMPLATE' &&
+                    tplChild.getAttribute('p-for') === ssrChild.getAttribute('p-for');
+
+                if (!alreadyPresent) {
+                    // Insert a clone of the SSR inner template into the outer template content.
+                    // cloneNode(true) copies the <template> element and its .content fragment
+                    // but does NOT copy the SSR-rendered siblings (p-for-key elements).
+                    const clonedInnerTemplate = ssrChild.cloneNode(true);
+                    templateEl.insertBefore(clonedInnerTemplate, tplChild || null);
+                    tplChildren.splice(ti, 0, clonedInnerTemplate);
+                }
+                ti++;
+            } else if (ti < tplChildren.length && tplChildren[ti].tagName === ssrChild.tagName) {
+                // Structurally matching element — recurse into children
+                this.enrichTemplateContent(tplChildren[ti], ssrChild);
+                ti++;
+            }
+        }
+    },
+
     hydrateLoop(template, parentScope, varPattern, iterableExpr) {
         template._scope = parentScope;
         
@@ -1250,6 +1294,20 @@ window.Pattr = {
                 }
                 sibling = sibling.nextElementSibling;
             }
+
+            // Enrich the outer template's content with any inner p-for templates found in
+            // SSR-rendered siblings but absent from template.content.  Without this,
+            // refreshLoop re-renders from template.content and loses the inner template.
+            const templateRoot = template.content.firstElementChild;
+            if (templateRoot) {
+                for (const elements of Object.values(existingElementsByKey)) {
+                    for (const el of elements) {
+                        if (el.querySelector && el.querySelector('template[p-for]')) {
+                            this.enrichTemplateContent(templateRoot, el);
+                        }
+                    }
+                }
+            }
             
             let index = 0;
             let lastInserted = template;
@@ -1267,6 +1325,10 @@ window.Pattr = {
                             el.setAttribute('p-for-key', scopePrefix + index);
                         }
                         this.walkDom(el, loopScope, true);
+                        // Mark AFTER walkDom so that the parent walkDom (which may still be
+                        // iterating over children that include this element) knows to skip it
+                        // and avoid re-evaluating its directives with the wrong outer scope.
+                        el._p_loopHydrated = true;
                         template._forData.renderedElements.push(el);
                         lastInserted = el;
                     });
@@ -1466,6 +1528,13 @@ window.Pattr = {
      * Walks the DOM tree, processing scopes, event handlers, and directives
      */
     walkDom(el, parentScope, isHydrating = false) {
+        // Skip elements already fully hydrated by hydrateLoop during this hydration pass.
+        // This prevents the parent walkDom from re-evaluating inner SSR elements with the
+        // wrong (outer-loop) scope when those elements live inside an outer SSR element.
+        if (isHydrating && el._p_loopHydrated) {
+            return;
+        }
+
         // Handle p-for templates separately
         if (el.tagName === 'TEMPLATE' && el.hasAttribute('p-for')) {
             // Skip nested templates during refresh (non-hydrating) - they will be 

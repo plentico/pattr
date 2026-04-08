@@ -177,6 +177,78 @@ describe('p-for SSR hydration', () => {
   });
 
   describe('Nested Loops with SSR', () => {
+    it('should render inner p-for items when the inner template is in SSR elements but not in outer template content', async () => {
+      // Reproduces the Pico compiler pattern where:
+      // - The outer <template p-for> content has NO inner <template p-for> (only a button)
+      // - The SSR-rendered outer elements DO contain the inner <template p-for> + rendered items
+      // Without enrichTemplateContent(), refreshAllLoops() → refreshLoop() re-renders from
+      // template.content (no inner template) and the inner items disappear.
+      const { document, Pattr } = setupPattr(`<!DOCTYPE html>
+        <html>
+          <head>
+            <script id="p-root-data" type="application/json">{
+              "content": {
+                "name": "Alice",
+                "tags": ["x", "y", "z"]
+              }
+            }</script>
+          </head>
+          <body>
+            <!-- Outer template content has NO inner template (Pico compiler pattern) -->
+            <template p-for="[key, value] of Object.entries(content)">
+              <div class="field">
+                <div class="array-container" p-show="Array.isArray(value)">
+                  <button type="button">+ Add</button>
+                </div>
+                <input p-show="!Array.isArray(value)">
+              </div>
+            </template>
+            <!-- SSR-rendered outer elements for each entry -->
+            <div class="field" p-for-key="s0:0">
+              <div class="array-container" p-show="Array.isArray(value)" style="display:none">
+                <button type="button">+ Add</button>
+              </div>
+              <input p-show="!Array.isArray(value)">
+            </div>
+            <div class="field" p-for-key="s0:1">
+              <!-- array-container for 'tags' DOES have the inner template + rendered items -->
+              <div class="array-container" p-show="Array.isArray(value)">
+                <template p-for="item of value">
+                  <span p-text="item"></span>
+                </template>
+                <span p-text="item" p-for-key="s1:0">x</span>
+                <span p-text="item" p-for-key="s1:1">y</span>
+                <span p-text="item" p-for-key="s1:2">z</span>
+                <button type="button">+ Add</button>
+              </div>
+              <input p-show="!Array.isArray(value)" style="display:none">
+            </div>
+          </body>
+        </html>
+      `);
+
+      await Pattr.start();
+
+      // The array-container for 'tags' should have the inner items rendered
+      const arrayContainers = document.querySelectorAll('.array-container');
+      // Find the one that's visible (p-show=true for the array field)
+      const visibleContainer = Array.from(arrayContainers).find(
+        el => el.style.display !== 'none'
+      );
+      expect(visibleContainer).toBeTruthy();
+
+      // Should contain the rendered inner items
+      const innerItems = visibleContainer.querySelectorAll('span[p-for-key]');
+      expect(innerItems.length).toBe(3);
+      expect(innerItems[0].innerText).toBe('x');
+      expect(innerItems[1].innerText).toBe('y');
+      expect(innerItems[2].innerText).toBe('z');
+
+      // The inner <template p-for> should also still be present
+      const innerTemplate = visibleContainer.querySelector('template[p-for]');
+      expect(innerTemplate).toBeTruthy();
+    });
+
     it('should maintain hierarchical scope IDs in nested loops', async () => {
       const { document, Pattr } = setupPattr(`<!DOCTYPE html>
         <html>
