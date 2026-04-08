@@ -995,22 +995,34 @@ window.Pattr = {
                 // Store the p-model value to identify this specific input
                 const modelAttrValue = el.getAttribute('p-model');
                 const inputTagName = el.tagName;
-                const inputType = el.type;
+
+                // Save cursor position before re-render so we can restore it after
+                // the loop re-creates the input element.
+                const selStart = el.selectionStart;
+                const selEnd   = el.selectionEnd;
                 
                 // Re-render DOM to reflect changes
                 this.walkDom(this.root, this.data, false);
                 
-                // Restore focus after DOM update (only for inputs in p-for loops)
-                // Non-loop inputs don't need focus restoration as they're not recreated
+                // Restore focus AND cursor position after DOM update.
+                // Only needed for inputs inside p-for loops — those elements are
+                // removed and re-created by refreshLoop, which drops focus and resets
+                // the selection. Non-loop inputs are updated in-place, so they keep focus.
                 if (pForKey && modelAttrValue) {
                     requestAnimationFrame(() => {
                         // Find the container with p-for-key, then find input with matching p-model
                         const containerEl = document.querySelector(`[p-for-key="${pForKey}"]`);
                         if (containerEl) {
-                            // Look for input with same p-model attribute
                             const elementToFocus = containerEl.querySelector(`${inputTagName.toLowerCase()}[p-model="${modelAttrValue}"]`);
                             if (elementToFocus) {
                                 elementToFocus.focus();
+                                // Restore cursor/selection position.
+                                // setSelectionRange is only valid on text-like inputs (not number, date, etc.)
+                                if (selStart !== null && selEnd !== null) {
+                                    try {
+                                        elementToFocus.setSelectionRange(selStart, selEnd);
+                                    } catch (_) { /* ignore for input types that don't support selection */ }
+                                }
                             }
                         }
                     });

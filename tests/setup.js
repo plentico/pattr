@@ -11,7 +11,16 @@ export function setupPattr(html) {
   });
   const window = dom.window;
   const document = window.document;
-  
+
+  // JSDOM does not provide requestAnimationFrame.
+  // Polyfill it to invoke callbacks synchronously: by the time pattr calls rAF the
+  // DOM has already been updated by walkDom, so immediate invocation is correct
+  // and avoids any async/timer complexity in tests.
+  if (!window.requestAnimationFrame) {
+    window.requestAnimationFrame = (callback) => { callback(0); return 1; };
+    window.cancelAnimationFrame = () => {};
+  }
+
   // Execute pattr.js in the JSDOM context (without auto-start)
   const script = document.createElement('script');
   script.textContent = pattrSource.replace('window.Pattr.start()', '// Auto-start disabled for tests');
