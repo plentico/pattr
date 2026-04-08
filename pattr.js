@@ -1146,6 +1146,11 @@ window.Pattr = {
                     // No ancestor prefix, just scope ID
                     template._forScopeId = ssrScopePrefix.substring(0, ssrScopePrefix.length - 1);
                 }
+                // Persist the scope ID as a data attribute so it survives cloneNode.
+                // When refreshLoop clones the outer template's content, the inner template
+                // clone carries this attribute and reuses the same ID on the next render,
+                // keeping p-for-key values stable across re-renders.
+                template.setAttribute('data-p-for-scope-id', template._forScopeId);
                 return ssrScopePrefix;
             }
         }
@@ -1207,9 +1212,19 @@ window.Pattr = {
             }
         }
         
-        // Generate a unique scope ID for this template if not already set from SSR
+        // Generate a unique scope ID for this template if not already set from SSR.
+        // Also check data-p-for-scope-id: cloneNode copies HTML attributes but not JS
+        // properties, so a cloned inner template will have the attribute but not _forScopeId.
+        // Reading it back here keeps the same ID across refreshLoop re-renders.
         if (!template._forScopeId) {
-            template._forScopeId = 's' + (this._templateScopeCounter++);
+            if (template.hasAttribute('data-p-for-scope-id')) {
+                // Restore the ID that was persisted by a previous call on the original template
+                template._forScopeId = template.getAttribute('data-p-for-scope-id');
+            } else {
+                template._forScopeId = 's' + (this._templateScopeCounter++);
+                // Persist so future clones of this template also reuse the same ID
+                template.setAttribute('data-p-for-scope-id', template._forScopeId);
+            }
         }
         
         return ancestorKey + template._forScopeId + ':';
@@ -1242,6 +1257,7 @@ window.Pattr = {
                     tplChild.tagName === 'TEMPLATE' &&
                     tplChild.getAttribute('p-for') === ssrChild.getAttribute('p-for');
 
+                let targetTpl; // the template element inside outerTemplate.content to annotate
                 if (!alreadyPresent) {
                     // Insert a clone of the SSR inner template into the outer template content.
                     // cloneNode(true) copies the <template> element and its .content fragment
@@ -1249,7 +1265,42 @@ window.Pattr = {
                     const clonedInnerTemplate = ssrChild.cloneNode(true);
                     templateEl.insertBefore(clonedInnerTemplate, tplChild || null);
                     tplChildren.splice(ti, 0, clonedInnerTemplate);
+                    targetTpl = clonedInnerTemplate;
+                } else {
+                    targetTpl = tplChild;
                 }
+
+                // Stamp a stable data-p-for-scope-id on the template inside outerTemplate.content
+                // so that every subsequent refreshLoop clone of that content inherits the same
+                // scope ID.  Without this, each clone starts without _forScopeId (cloneNode
+                // doesn't copy JS properties) and getTemplateScopePrefix mints a fresh counter
+                // ID, making p-for-key values change on every re-render and breaking the
+                // requestAnimationFrame focus-restoration querySelector.
+                //
+                // enrichTemplateContent runs *before* hydrateLoop processes SSR elements, but
+                // the SSR-rendered loop items (div.array-item[p-for-key="s0:2-s4:0"] etc.) are
+                // already in the DOM as siblings of ssrChild, so we can read the scope ID from
+                // them right here.
+                if (targetTpl && !targetTpl.hasAttribute('data-p-for-scope-id')) {
+                    const firstLoopItem = ssrChild.nextElementSibling;
+                    if (firstLoopItem && firstLoopItem.hasAttribute('p-for-key')) {
+                        // Extract the inner scope ID segment from the SSR key
+                        // e.g. "s0:2-s4:0" → scopePart "s0:2-s4" → scopeId "s4"
+                        const ssrKey = firstLoopItem.getAttribute('p-for-key');
+                        const col = ssrKey.lastIndexOf(':');
+                        if (col > 0) {
+                            const scopePart = ssrKey.substring(0, col);
+                            const dash = scopePart.lastIndexOf('-');
+                            const scopeId = dash >= 0 ? scopePart.substring(dash + 1) : scopePart;
+                            targetTpl.setAttribute('data-p-for-scope-id', scopeId);
+                        }
+                    } else {
+                        // No SSR items (e.g. initially-empty array) — generate a stable ID now
+                        // so that all future refreshLoop clones also use the same ID.
+                        targetTpl.setAttribute('data-p-for-scope-id', 's' + (this._templateScopeCounter++));
+                    }
+                }
+
                 ti++;
             } else if (ti < tplChildren.length && tplChildren[ti].tagName === ssrChild.tagName) {
                 // Structurally matching element — recurse into children

@@ -182,6 +182,92 @@ describe('p-model bracket notation', () => {
     expect(restored.selectionEnd).toBe(3);
   });
 
+  test('cursor position is restored in a NESTED loop (inner template scope ID stays stable)', () => {
+    // Regression test: when an outer refreshLoop clones outerTemplate.content, the
+    // inner <template p-for> clone loses its _forScopeId JS property (cloneNode does
+    // not copy JS properties).  Without the data-p-for-scope-id attribute fix, each
+    // refresh mints a NEW scope ID for the inner template, so p-for-key values change
+    // on every render (e.g. "s0:1-s1:0" → "s0:1-s2:0") and the rAF querySelector
+    // finds nothing → focus is dropped entirely.
+    //
+    // The HTML below mimics SSR output: the outer template has p-for-key siblings and
+    // the inner template has p-for-key items inside each outer iteration.
+    const { window, document, Pattr } = setupPattr(`<!DOCTYPE html>
+      <html>
+        <head>
+          <script id="p-root-data" type="application/json">
+            {"content": {"tags": ["js", "css", "html"]}}
+          </script>
+        </head>
+        <body>
+          <!-- outer loop template + SSR-rendered div.field elements -->
+          <template p-for="[key, value] of Object.entries(content)">
+            <div class="field">
+              <div class="array-container" p-show="Array.isArray(value)">
+                <!-- inner loop template (present in template content) -->
+                <template p-for="[i, item] of content[key].entries()">
+                  <div class="array-item">
+                    <input type="text" p-model="content[key][i]" />
+                  </div>
+                </template>
+                <!-- SSR-rendered inner items for the "tags" entry (outer key s0:0) -->
+                <div class="array-item" p-for-key="s0:0-s1:0">
+                  <input type="text" value="js" p-model="content[key][i]" />
+                </div>
+                <div class="array-item" p-for-key="s0:0-s1:1">
+                  <input type="text" value="css" p-model="content[key][i]" />
+                </div>
+                <div class="array-item" p-for-key="s0:0-s1:2">
+                  <input type="text" value="html" p-model="content[key][i]" />
+                </div>
+              </div>
+            </div>
+          </template>
+          <!-- SSR-rendered outer item for "tags" -->
+          <div class="field" p-for-key="s0:0">
+            <div class="array-container" p-show="Array.isArray(value)">
+              <template p-for="[i, item] of content[key].entries()">
+                <div class="array-item">
+                  <input type="text" p-model="content[key][i]" />
+                </div>
+              </template>
+              <div class="array-item" p-for-key="s0:0-s1:0">
+                <input type="text" value="js" p-model="content[key][i]" />
+              </div>
+              <div class="array-item" p-for-key="s0:0-s1:1">
+                <input type="text" value="css" p-model="content[key][i]" />
+              </div>
+              <div class="array-item" p-for-key="s0:0-s1:2">
+                <input type="text" value="html" p-model="content[key][i]" />
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+
+    Pattr.start();
+
+    // After start(), refreshAllLoops() re-renders from the outer template.
+    // With the data-p-for-scope-id fix the inner scope ID "s1" is preserved from the
+    // SSR HTML, so inner items keep p-for-key "s0:0-s1:0" etc.
+    const inputs = document.querySelectorAll('input[p-model]');
+    expect(inputs.length).toBe(3);
+    expect(inputs[0].value).toBe('js');
+
+    // Simulate editing "js" → "jsx", cursor at position 3
+    inputs[0].value = 'jsx';
+    inputs[0].setSelectionRange(3, 3);
+    inputs[0].dispatchEvent(new window.Event('input', { bubbles: true }));
+
+    // rAF is synchronous in tests (see setup.js polyfill).
+    // The restored input must have the updated value AND cursor at position 3.
+    const restored = document.querySelectorAll('input[p-model]')[0];
+    expect(restored.value).toBe('jsx');
+    expect(restored.selectionStart).toBe(3);
+    expect(restored.selectionEnd).toBe(3);
+  });
+
   test('nested brackets: p-model="content[key][i]" edits correct array element', () => {
     const { window, document, Pattr } = setupPattr(`<!DOCTYPE html>
       <html>
