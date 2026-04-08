@@ -954,17 +954,20 @@ window.Pattr = {
                 // This handles cases like content[key] where content is inherited
                 const scope = el._scope;
                 
-                // For bracket notation like content[key], we need to evaluate key first
+                // For bracket notation like content[key] or nested content[key][i],
+                // split at the LAST bracket pair: evaluate the container object and the key
+                // separately through the scope chain, then set directly on the container.
+                // This handles arbitrary nesting depth AND avoids a subtle `with`-statement
+                // variable-shadowing bug: if the loop uses `for [key, value] of ...` then
+                // `value` is a scope property, so `eval('with (scope) { expr = value }')` would
+                // assign the loop variable back to itself instead of the new input value.
                 if (modelAttr.includes('[')) {
-                    // Extract the object name and key expression
-                    const match = modelAttr.match(/^(.+)\[(.+)\]$/);
-                    if (match) {
-                        const [, objName, keyExpr] = match;
-                        const key = eval(`with (scope) { ${keyExpr} }`);
-                        scope[objName][key] = value;  // Set on Proxy to trigger reactivity
-                    } else {
-                        eval(`with (scope) { ${modelAttr} = value }`);
-                    }
+                    const lastBracket = modelAttr.lastIndexOf('[');
+                    const containerExpr = modelAttr.substring(0, lastBracket);
+                    const keyExpr = modelAttr.substring(lastBracket + 1, modelAttr.length - 1);
+                    const container = eval(`with (scope) { (${containerExpr}) }`);
+                    const key = eval(`with (scope) { (${keyExpr}) }`);
+                    container[key] = value;
                 } else if (modelAttr.includes('.')) {
                     // Handle dot notation like content.path
                     const parts = modelAttr.split('.');
@@ -1025,23 +1028,16 @@ window.Pattr = {
                     value = e.target.checked ? e.target.value : undefined;
                 }
             if (value !== undefined) {
-                // Set on the scope (Proxy) to trigger reactive updates
-                // This handles cases like content[key] where content is inherited
                 const scope = el._scope;
-                
-                // For bracket notation like content[key], we need to evaluate key first
                 if (modelAttr.includes('[')) {
-                    // Extract the object name and key expression
-                    const match = modelAttr.match(/^(.+)\[(.+)\]$/);
-                    if (match) {
-                        const [, objName, keyExpr] = match;
-                        const key = eval(`with (scope) { ${keyExpr} }`);
-                        scope[objName][key] = value;  // Set on Proxy to trigger reactivity
-                    } else {
-                        eval(`with (scope) { ${modelAttr} = value }`);
-                    }
+                    const lastBracket = modelAttr.lastIndexOf('[');
+                    const containerExpr = modelAttr.substring(0, lastBracket);
+                    const keyExpr = modelAttr.substring(lastBracket + 1, modelAttr.length - 1);
+                    const container = eval(`with (scope) { (${containerExpr}) }`);
+                    const key = eval(`with (scope) { (${keyExpr}) }`);
+                    container[key] = value;
                 } else {
-                    scope[modelAttr] = value;  // Set on Proxy to trigger reactivity
+                    scope[modelAttr] = value;
                 }
             }
             });
@@ -1591,6 +1587,24 @@ window.Pattr = {
                     this.directives[parsed.directive](el, value, parsed.modifiers);
                 }
             });
+        }
+
+        // During hydration, don't recurse into children of a hidden element.
+        // This prevents nested <template p-for> directives from being evaluated with
+        // undefined loop variables when their containing p-show element is false
+        // (e.g. the inner array loop inside an array-container that is hidden for scalar values).
+        if (isHydrating && currentScope) {
+            for (const attr of el.attributes) {
+                const parsed = this.parseDirectiveModifiers(attr.name);
+                if (parsed.directive === 'p-show' && !parsed.modifiers['pre-scope']) {
+                    try {
+                        if (!eval(`with (currentScope) { (${attr.value}) }`)) {
+                            return;
+                        }
+                    } catch (e) { /* ignore evaluation errors, proceed with children */ }
+                    break;
+                }
+            }
         }
 
         // Recurse to children
