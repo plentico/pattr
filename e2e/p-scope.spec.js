@@ -210,17 +210,18 @@ test.describe('p-scope directive', () => {
   });
 
   test('local scope variable (name2) does not propagate to parent', async ({ page }) => {
-    const syncedSection = page.locator('#synced-scope');
-    const name2Input = syncedSection.locator('input[p-model="name2"]');
-    const parentName2Display = page.locator('div').filter({ hasText: /Other name is:/ }).first();
+    // name2 in #unsynced-scope is a regular p-scope variable (not synced)
+    const name2Input = page.locator('#unsynced-scope input[p-model="name2"]');
+    // The parent-level name2 display is outside all scoped sections
+    const parentName2Display = page.locator('[p-text*="name2"]').first();
 
     // Initial: name2 = Ted
     await expect(parentName2Display).toContainText('Ted');
 
-    // Change name2 in synced scope (should stay local since it's from p-scope, not p-scope:sync)
+    // Change name2 in the unsynced scope (should stay local since it's p-scope, not p-scope:sync)
     await name2Input.fill('Changed');
 
-    // Parent name2 should still be Ted (not synced)
+    // Parent name2 should still be Ted (not propagated)
     await expect(parentName2Display).toContainText('Ted');
   });
 

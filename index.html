@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" p-scope="show_cats = false; cats = ['Ralph', 'Betsy', 'Drago']; add_cat = ''; emoji = false; coolname = name + 'cool';">
+<html lang="en" p-scope="show_cats = false; cats = ['Ralph', 'Betsy', 'Drago']; add_cat = ''; emoji = false; coolname = name + 'cool'; get_set_vars = {get name() { return name; },set name(value) { name = value; },get cats() { return cats; },set cats(value) { cats = value },};">
     <head>
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50'/></svg>">
         <script src="/pattr.js" defer></script>
@@ -23,7 +23,12 @@
             <span p-text="two"></span>
             <span p-text="three"></span>
         </div>
-        <div p-text="`Other name is: ${name2}`"></div>
+        <div p-text="`Name2 is: ${name2}`"></div>
+        <input type="text" p-model="name2" />
+        <template p-for="[key, value] of Object.entries(get_set_vars)">
+            <div p-text="value"></div>
+            <input p-model="get_set_vars[key]">
+        </template>
         <template p-for="[key, value] in Object.entries(content)">
         <div class="content-loop-item">
             <input type="text" p-model="content[key]" />
@@ -70,15 +75,24 @@
             <button p-on:click="count--">-</button>
             <hr>
         </section>
-        <section id="synced-scope" p-scope="name2 = name2;" p-scope:sync="count = count; name = name; content = content;">
+        <section id="synced-scope" p-scope:sync="count = count; name = name; content = content;">
             <div>Sync'd Component (count):</div>
             <div p-text="`Count: ${count}`"></div>
             <button p-on:click="count++">+</button>
             <button p-on:click="count--">-</button>
             <input type="text" p-model="name" />
-            <input type="text" p-model="name2" />
             <input type="text" p-model="content.path" />
             <input type="text" p-model="content.title" />
+            <hr>
+        </section>
+        <section id="unsynced-scope" p-scope="name2 = name2; get_set_vars = get_set_vars;">
+            <div>Unsync'd Component:</div>
+            <div p-text="`Name2 is: ${name2}`"></div>
+            <input type="text" p-model="name2" />
+            <template p-for="[key, value] of Object.entries(get_set_vars)">
+                <div p-text="value"></div>
+                <input p-model="get_set_vars[key]">
+            </template>
             <hr>
         </section>
         <section id="child-scope" p-scope="count = count * 2; name = name + 'o';">

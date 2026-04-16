@@ -6,7 +6,99 @@
  */
 window.Pattr = {
     _templateScopeCounter: 0,
-    
+
+    /**
+     * Creates a shadow object for a getter/setter object assigned via a non-sync p-scope.
+     *
+     * Getter/setter objects produced by pico (e.g. `content = { get name() {...}, set name(v) {...} }`)
+     * have setters that are closure-bound to the PARENT scope's proxy variables. When assigned to a
+     * child component's regular p-scope (not :sync), any write to content[key] would fire the original
+     * setter which reaches back into the parent's scope, bypassing pattr's proxy entirely.
+     *
+     * The shadow object:
+     *   - Reads through to the original getter (live: reflects parent changes until overridden locally)
+     *   - Intercepts setters so writes stay in a local `localOverrides` map and never touch the parent
+     *
+     * Returns null if the object has no getter-defined properties (not a getter/setter proxy).
+     */
+    /**
+     * Creates (or re-targets) a shadow for a getter/setter proxy object.
+     *
+     * existingLocalOverrides — pass the `_p_localOverrides` from a previously-created
+     * shadow for the same variable so that child-local writes survive a parent re-render
+     * that produces a new getter/setter object with a different reference.
+     */
+    _createGetterSetterShadow(obj, existingLocalOverrides = null, existingExplicitKeys = null) {
+        if (obj === null || typeof obj !== 'object') return null;
+        const descs = Object.getOwnPropertyDescriptors(obj);
+        const hasGetters = Object.values(descs).some(d => typeof d.get === 'function');
+        if (!hasGetters) return null;
+
+        // Build localOverrides from ONLY the explicitly-written child overrides (not
+        // pre-copies from a previous shadow). Pre-copies are refreshed from the new obj
+        // so that parent mutations to arrays propagate to the child unless the child has
+        // explicitly written its own value for that key.
+        const explicitKeys = new Set(existingExplicitKeys || []);
+        const localOverrides = {};
+        if (existingLocalOverrides) {
+            for (const key of explicitKeys) {
+                if (key in existingLocalOverrides) {
+                    localOverrides[key] = existingLocalOverrides[key];
+                }
+            }
+        }
+
+        // Track the parent array reference we last pre-copied from, keyed by property name.
+        // This lets the getter detect when the parent has replaced an array (new reference)
+        // vs an in-place mutation (same reference), and refresh the copy accordingly.
+        const preCopyRefs = {};
+
+        const shadow = {};
+        for (const [propKey, desc] of Object.entries(descs)) {
+            if (typeof desc.get === 'function') {
+                const getter = desc.get;
+                Object.defineProperty(shadow, propKey, {
+                    get: () => {
+                        // Explicit child write always wins.
+                        if (explicitKeys.has(propKey)) {
+                            return localOverrides[propKey];
+                        }
+                        const parentVal = getter.call(obj);
+                        // For arrays: keep a local copy so in-place child mutations
+                        // (e.g. arr[0] = x) stay isolated from the parent's actual array.
+                        // Invalidate the copy whenever the parent provides a NEW reference
+                        // (e.g. cats = [...cats, 'NewCat']) so the child always sees the
+                        // current parent value without needing the shadow to be recreated.
+                        if (Array.isArray(parentVal)) {
+                            if (preCopyRefs[propKey] !== parentVal) {
+                                localOverrides[propKey] = [...parentVal];
+                                preCopyRefs[propKey] = parentVal;
+                            }
+                            return localOverrides[propKey];
+                        }
+                        // Scalars and non-array objects read through live.
+                        return parentVal;
+                    },
+                    // Writes go to localOverrides only — never call the original setter.
+                    // Clear the pre-copy reference so a future read doesn't overwrite the
+                    // explicit child value with a stale copy.
+                    set: (v) => { localOverrides[propKey] = v; explicitKeys.add(propKey); delete preCopyRefs[propKey]; },
+                    enumerable: true,
+                    configurable: true,
+                });
+            } else if ('value' in desc) {
+                shadow[propKey] = desc.value;
+            }
+        }
+
+        // Expose metadata so callers can preserve explicit child writes across re-shadowing.
+        Object.defineProperty(shadow, '_p_isShadow', { value: true, enumerable: false, configurable: false });
+        Object.defineProperty(shadow, '_p_localOverrides', { value: localOverrides, enumerable: false, configurable: false });
+        Object.defineProperty(shadow, '_p_explicitOverrideKeys', { value: explicitKeys, enumerable: false, configurable: false });
+
+        return shadow;
+    },
+
     directives: {
         'p-text': (el, value, modifiers = {}) => {
             let text = String(value);
@@ -424,9 +516,17 @@ window.Pattr = {
                 return target[key];
             },
             set: (target, key, value) => {
-                // If setting a synced object, wrap it
+                // If setting a synced object, wrap it with a deep proxy
                 if (syncVarsSet.has(key) && value !== null && typeof value === 'object') {
                     value = createDeepProxy(value, true, key);
+                }
+
+                // For non-sync assignments of getter/setter objects, create a shadow so that
+                // setter calls from within the child scope don't write through to the parent's
+                // closure variables (which would bypass p-scope isolation).
+                if (!syncVarsSet.has(key) && value !== null && typeof value === 'object') {
+                    const shadow = this._createGetterSetterShadow(value);
+                    if (shadow) value = shadow;
                 }
                 
                 target[key] = value;
@@ -573,8 +673,10 @@ window.Pattr = {
             el._p_syncVars = new Set(syncVars);
         }
         
-        // Execute p-scope assignments directly on target to avoid triggering setter
-        this.executePScopeStatements(scope, pScopeExpr);
+        // Execute p-scope assignments directly on target to avoid triggering setter.
+        // Pass the sync vars so executePScopeStatements can shadow getter/setter objects
+        // assigned to non-sync props (preventing setter write-through to parent scope).
+        this.executePScopeStatements(scope, pScopeExpr, new Set(syncVars));
         
         // Initialize parent snapshot so first refresh doesn't think everything changed
         const parentProto = Object.getPrototypeOf(scope._p_target);
@@ -633,15 +735,44 @@ window.Pattr = {
     },
 
     /**
-     * Parses and executes p-scope statements sequentially, setting values directly on target
-     * Each statement sees the results of previous statements
+     * Parses and executes p-scope statements sequentially, setting values directly on target.
+     * Each statement sees the results of previous statements.
+     *
+     * syncVarsSet: Set of variable names that are sync props (p-scope:sync). Getter/setter
+     * objects assigned to non-sync vars are wrapped in a shadow to prevent setter write-through.
      */
-    executePScopeStatements(scope, pScopeExpr) {
+    executePScopeStatements(scope, pScopeExpr, syncVarsSet = new Set()) {
         const statements = this.splitPScopeStatements(pScopeExpr);
         const target = scope._p_target;
         
+        // Helper: apply getter/setter shadow for non-sync object assignments.
+        // ONLY shadow when the value is the exact same object reference already
+        // present in the parent scope (i.e. it was passed down as a prop via
+        // "content = content"). Objects *created* in this scope (like root-level
+        // getter/setter proxy objects "content = { get name()... }") must NOT be
+        // shadowed — their setters reference variables in THIS scope, so shadowing
+        // would prevent reactive updates in the current scope.
+        const parentTarget = Object.getPrototypeOf(target);
+        const maybeShade = (varName, value) => {
+            if (!syncVarsSet.has(varName) && value !== null && typeof value === 'object') {
+                const comesFromParent = parentTarget && value === parentTarget[varName];
+                if (comesFromParent) {
+                    const shadow = this._createGetterSetterShadow(value);
+                    if (shadow) return shadow;
+                }
+            }
+            return value;
+        };
+
         // Create a sequential scope that always reads from target first (for updated values)
-        // then falls back to the parent scope for inherited values
+        // then falls back to the parent scope for inherited values.
+        //
+        // The set trap is critical for getter/setter objects defined IN this scope
+        // (e.g. `get_set_vars = {get name(){return name;}, set name(v){name=v;}}`).
+        // Those setter functions close over this sequentialScope via `with`.  Without
+        // a set trap, calling the setter later writes directly to `target` and bypasses
+        // the reactive proxy, so pattr never learns that a value changed.  Routing
+        // writes through `scope` (the reactive proxy) ensures walkDom is triggered.
         const sequentialScope = new Proxy(target, {
             get: (t, key) => {
                 // First check if we have a local value (possibly updated by previous statement)
@@ -650,6 +781,12 @@ window.Pattr = {
                 }
                 // Fall back to parent scope via prototype chain or original scope
                 return scope[key];
+            },
+            set: (t, key, value) => {
+                // Forward through the reactive proxy so setter functions defined inside
+                // p-scope expressions trigger walkDom when invoked post-setup.
+                scope[key] = value;
+                return true;
             },
             has: (t, key) => {
                 return Object.prototype.hasOwnProperty.call(t, key) || key in scope;
@@ -666,7 +803,7 @@ window.Pattr = {
                     const value = eval(`with (sequentialScope) { (${expr}) }`);
                     if (Array.isArray(value)) {
                         varNames.forEach((varName, i) => {
-                            target[varName] = value[i];
+                            target[varName] = maybeShade(varName, value[i]);
                         });
                     }
                 } catch (e) {
@@ -684,7 +821,7 @@ window.Pattr = {
                     const value = eval(`with (sequentialScope) { (${expr}) }`);
                     if (typeof value === 'object' && value !== null) {
                         varNames.forEach(varName => {
-                            target[varName] = value[varName];
+                            target[varName] = maybeShade(varName, value[varName]);
                         });
                     }
                 } catch (e) {
@@ -699,7 +836,7 @@ window.Pattr = {
                 const [, varName, expr] = match;
                 try {
                     const value = eval(`with (sequentialScope) { (${expr}) }`);
-                    target[varName] = value;
+                    target[varName] = maybeShade(varName, value);
                 } catch (e) {
                     console.error(`Error executing p-scope statement "${stmt}":`, e);
                 }
@@ -729,6 +866,27 @@ window.Pattr = {
                     changedParentVars.add(key);
                 }
                 el._parentSnapshot[key] = parentProto[key];
+            }
+        }
+
+        // For non-sync shadow objects: when a parent variable changes, clear any
+        // matching explicit child overrides so the getter reads through to the
+        // parent's new value.  This enforces one-way p-scope semantics:
+        //   parent re-changes always propagate to the child, even if the child
+        //   had previously set a local value for that same property.
+        if (changedParentVars.size > 0) {
+            const scopeSyncVarsSet = el._p_syncVars || new Set();
+            for (const ownKey of Object.keys(target)) {
+                if (ownKey.startsWith('_p_') || scopeSyncVarsSet.has(ownKey)) continue;
+                const val = target[ownKey];
+                if (val && typeof val === 'object' && val._p_isShadow) {
+                    for (const changedVar of changedParentVars) {
+                        if (val._p_explicitOverrideKeys.has(changedVar)) {
+                            delete val._p_localOverrides[changedVar];
+                            val._p_explicitOverrideKeys.delete(changedVar);
+                        }
+                    }
+                }
             }
         }
         
@@ -788,6 +946,7 @@ window.Pattr = {
             // - For PARENT-changed vars: reads from parent (new value)
             // - For LOCAL-changed vars: reads from local (new value)
             // - Otherwise: reads from local if exists, else parent
+            const scopeSyncVars = el._p_syncVars || new Set();
             const sequentialScope = new Proxy(target, {
                 get: (t, key) => {
                     if (key === '_p_target' || key === '_p_children' || key === '_p_scope') {
@@ -812,6 +971,20 @@ window.Pattr = {
                     return parentProto[key];
                 },
                 set: (t, key, value) => {
+                    // Apply the same getter/setter shadow logic as executePScopeStatements
+                    // (comesFromParent guard + preserve ONLY explicitly child-written overrides
+                    // so that parent mutations to arrays propagate correctly on re-shadow).
+                    if (!scopeSyncVars.has(key) && value !== null && typeof value === 'object') {
+                        const parentProto2 = Object.getPrototypeOf(t);
+                        const comesFromParent = parentProto2 && value === parentProto2[key];
+                        if (comesFromParent) {
+                            const existing = Object.prototype.hasOwnProperty.call(t, key) ? t[key] : null;
+                            const existingOverrides = existing && existing._p_isShadow ? existing._p_localOverrides : null;
+                            const existingExplicitKeys = existing && existing._p_isShadow ? existing._p_explicitOverrideKeys : null;
+                            const shadow = this._createGetterSetterShadow(value, existingOverrides, existingExplicitKeys);
+                            if (shadow) value = shadow;
+                        }
+                    }
                     t[key] = value;
                     return true;
                 },
@@ -885,7 +1058,20 @@ window.Pattr = {
                     const match = stmt.match(/^(\w+)\s*=\s*(.+)$/);
                     if (match) {
                         const [, varName, expr] = match;
-                        const value = eval(`with (sequentialScope) { (${expr}) }`);
+                        let value = eval(`with (sequentialScope) { (${expr}) }`);
+                        // Mirror the comesFromParent shadow logic from executePScopeStatements.
+                        // Preserve ONLY explicitly child-written overrides so that parent
+                        // mutations to arrays propagate correctly on re-shadow.
+                        if (!scopeSyncVars.has(varName) && value !== null && typeof value === 'object') {
+                            const comesFromParent = parentProto && value === parentProto[varName];
+                            if (comesFromParent) {
+                                const existing = Object.prototype.hasOwnProperty.call(target, varName) ? target[varName] : null;
+                                const existingOverrides = existing && existing._p_isShadow ? existing._p_localOverrides : null;
+                                const existingExplicitKeys = existing && existing._p_isShadow ? existing._p_explicitOverrideKeys : null;
+                                const shadow = this._createGetterSetterShadow(value, existingOverrides, existingExplicitKeys);
+                                if (shadow) value = shadow;
+                            }
+                        }
                         target[varName] = value;
                         setInThisPass.add(varName);
                     }
@@ -1010,19 +1196,30 @@ window.Pattr = {
                 // the selection. Non-loop inputs are updated in-place, so they keep focus.
                 if (pForKey && modelAttrValue) {
                     requestAnimationFrame(() => {
-                        // Find the container with p-for-key, then find input with matching p-model
-                        const containerEl = document.querySelector(`[p-for-key="${pForKey}"]`);
-                        if (containerEl) {
-                            const elementToFocus = containerEl.querySelector(`${inputTagName.toLowerCase()}[p-model="${modelAttrValue}"]`);
-                            if (elementToFocus) {
-                                elementToFocus.focus();
-                                // Restore cursor/selection position.
-                                // setSelectionRange is only valid on text-like inputs (not number, date, etc.)
-                                if (selStart !== null && selEnd !== null) {
-                                    try {
-                                        elementToFocus.setSelectionRange(selStart, selEnd);
-                                    } catch (_) { /* ignore for input types that don't support selection */ }
-                                }
+                        // First try: find the input directly by p-for-key + p-model.
+                        // This handles "flat" loop templates where the input itself carries
+                        // p-for-key (e.g. <div p-for-key> and <input p-for-key> are siblings).
+                        // Note: modelAttrValue may contain [ ] characters (e.g. "obj[key]");
+                        // inside a quoted CSS attribute value these are treated as literals.
+                        let elementToFocus = document.querySelector(
+                            `${inputTagName.toLowerCase()}[p-for-key="${pForKey}"][p-model="${modelAttrValue}"]`
+                        );
+                        // Fallback: find the container with p-for-key, then find input with matching p-model inside it.
+                        // This handles the more common case where a wrapper div carries p-for-key.
+                        if (!elementToFocus) {
+                            const containerEl = document.querySelector(`[p-for-key="${pForKey}"]`);
+                            if (containerEl) {
+                                elementToFocus = containerEl.querySelector(`${inputTagName.toLowerCase()}[p-model="${modelAttrValue}"]`);
+                            }
+                        }
+                        if (elementToFocus) {
+                            elementToFocus.focus();
+                            // Restore cursor/selection position.
+                            // setSelectionRange is only valid on text-like inputs (not number, date, etc.)
+                            if (selStart !== null && selEnd !== null) {
+                                try {
+                                    elementToFocus.setSelectionRange(selStart, selEnd);
+                                } catch (_) { /* ignore for input types that don't support selection */ }
                             }
                         }
                     });
@@ -1459,7 +1656,38 @@ window.Pattr = {
         
         try {
             const iterable = eval(`with (parentScope._p_target || parentScope) { (${iterableExpr}) }`);
-            
+
+            // Materialise the iterable so we can (a) compare with the previous render
+            // and (b) iterate it without risk of exhausting a one-pass generator.
+            const items = Array.from(iterable);
+
+            // Skip re-rendering if the loop data hasn't actually changed.
+            // This prevents unnecessary DOM thrashing when a parent event handler
+            // (e.g. p-on:blur/focus) triggers a walkDom whose visible loop data is
+            // unchanged.  Array items (e.g. Object.entries pairs) are compared
+            // element-by-element; primitives and object references use strict equality.
+            const prevItems = forData._prevItems;
+            if (prevItems && prevItems.length === items.length) {
+                let changed = false;
+                for (let i = 0; i < items.length && !changed; i++) {
+                    const prev = prevItems[i];
+                    const curr = items[i];
+                    if (Array.isArray(prev) && Array.isArray(curr)) {
+                        if (prev.length !== curr.length) {
+                            changed = true;
+                        } else {
+                            for (let j = 0; j < prev.length && !changed; j++) {
+                                if (prev[j] !== curr[j]) changed = true;
+                            }
+                        }
+                    } else if (prev !== curr) {
+                        changed = true;
+                    }
+                }
+                if (!changed) return;
+            }
+            forData._prevItems = items;
+
             // Use stored scope prefix or regenerate if needed
             const scopePrefix = forData.scopePrefix || this.getTemplateScopePrefix(template);
             
@@ -1471,7 +1699,7 @@ window.Pattr = {
             let lastInsertedElement = template;
             
             let index = 0;
-            for (const item of iterable) {
+            for (const item of items) {
                 const clone = template.content.cloneNode(true);
                 const loopScope = this.createLoopScope(parentScope, forData.varPattern, item);
                 
