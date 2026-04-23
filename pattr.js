@@ -290,11 +290,17 @@ window.Pattr = {
             el.className = finalClasses.join(' ');
         },
         'p-model': (el, value) => {
-            // If value is an array, join with commas for display
-            if (Array.isArray(value)) {
-                el.value = value.join(', ');
+            if (el.type === 'checkbox') {
+                el.checked = !!value;
+            } else if (el.type === 'radio') {
+                el.checked = (el.value === value);
             } else {
-                el.value = value;
+                // If value is an array, join with commas for display
+                if (Array.isArray(value)) {
+                    el.value = value.join(', ');
+                } else {
+                    el.value = value;
+                }
             }
         },
         'p-attr': (el, value, modifiers = {}) => {
