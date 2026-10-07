@@ -1415,6 +1415,23 @@ window.Pattr = {
             elements.forEach(el => this.setForTemplateRecursive(el, template._forTemplate));
         }
 
+        // Stamp the owning loop item's p-for-key on the inflated content so
+        // client-rendered output matches SSR markup and the p-model
+        // focus-restoration lookup can find re-rendered inputs inside components.
+        // Nested p-comp anchors inherit the key via _p_forKey (set before the walk
+        // below inflates them); templates keep it as a JS property only, matching
+        // the loop render branches which never stamp key attributes on templates.
+        const forKey = template._p_forKey || template.getAttribute('p-for-key');
+        if (forKey) {
+            elements.forEach(el => {
+                el._p_forKey = forKey;
+                if (el.tagName !== 'TEMPLATE') {
+                    el.setAttribute('p-for-key', forKey);
+                }
+                el.querySelectorAll('template[p-comp]').forEach(tpl => { tpl._p_forKey = forKey; });
+            });
+        }
+
         const fragment = document.createDocumentFragment();
         elements.forEach(el => fragment.appendChild(el));
         template.parentNode.insertBefore(fragment, template.nextSibling);
@@ -1453,11 +1470,11 @@ window.Pattr = {
                     // No ancestor prefix, just scope ID
                     template._forScopeId = ssrScopePrefix.substring(0, ssrScopePrefix.length - 1);
                 }
-                // Persist the scope ID as a data attribute so it survives cloneNode.
+                // Persist the scope ID as an attribute so it survives cloneNode.
                 // When refreshLoop clones the outer template's content, the inner template
                 // clone carries this attribute and reuses the same ID on the next render,
                 // keeping p-for-key values stable across re-renders.
-                template.setAttribute('data-p-for-scope-id', template._forScopeId);
+                template.setAttribute('p-for-scope-id', template._forScopeId);
                 return ssrScopePrefix;
             }
         }
@@ -1520,17 +1537,17 @@ window.Pattr = {
         }
         
         // Generate a unique scope ID for this template if not already set from SSR.
-        // Also check data-p-for-scope-id: cloneNode copies HTML attributes but not JS
+        // Also check p-for-scope-id: cloneNode copies HTML attributes but not JS
         // properties, so a cloned inner template will have the attribute but not _forScopeId.
         // Reading it back here keeps the same ID across refreshLoop re-renders.
         if (!template._forScopeId) {
-            if (template.hasAttribute('data-p-for-scope-id')) {
+            if (template.hasAttribute('p-for-scope-id')) {
                 // Restore the ID that was persisted by a previous call on the original template
-                template._forScopeId = template.getAttribute('data-p-for-scope-id');
+                template._forScopeId = template.getAttribute('p-for-scope-id');
             } else {
                 template._forScopeId = 's' + (this._templateScopeCounter++);
                 // Persist so future clones of this template also reuse the same ID
-                template.setAttribute('data-p-for-scope-id', template._forScopeId);
+                template.setAttribute('p-for-scope-id', template._forScopeId);
             }
         }
         
@@ -1577,7 +1594,7 @@ window.Pattr = {
                     targetTpl = tplChild;
                 }
 
-                // Stamp a stable data-p-for-scope-id on the template inside outerTemplate.content
+                // Stamp a stable p-for-scope-id on the template inside outerTemplate.content
                 // so that every subsequent refreshLoop clone of that content inherits the same
                 // scope ID.  Without this, each clone starts without _forScopeId (cloneNode
                 // doesn't copy JS properties) and getTemplateScopePrefix mints a fresh counter
@@ -1588,7 +1605,7 @@ window.Pattr = {
                 // the SSR-rendered loop items (div.array-item[p-for-key="s0:2-s4:0"] etc.) are
                 // already in the DOM as siblings of ssrChild, so we can read the scope ID from
                 // them right here.
-                if (targetTpl && !targetTpl.hasAttribute('data-p-for-scope-id')) {
+                if (targetTpl && !targetTpl.hasAttribute('p-for-scope-id')) {
                     const firstLoopItem = ssrChild.nextElementSibling;
                     if (firstLoopItem && firstLoopItem.hasAttribute('p-for-key')) {
                         // Extract the inner scope ID segment from the SSR key
@@ -1599,12 +1616,12 @@ window.Pattr = {
                             const scopePart = ssrKey.substring(0, col);
                             const dash = scopePart.lastIndexOf('-');
                             const scopeId = dash >= 0 ? scopePart.substring(dash + 1) : scopePart;
-                            targetTpl.setAttribute('data-p-for-scope-id', scopeId);
+                            targetTpl.setAttribute('p-for-scope-id', scopeId);
                         }
                     } else {
                         // No SSR items (e.g. initially-empty array) — generate a stable ID now
                         // so that all future refreshLoop clones also use the same ID.
-                        targetTpl.setAttribute('data-p-for-scope-id', 's' + (this._templateScopeCounter++));
+                        targetTpl.setAttribute('p-for-scope-id', 's' + (this._templateScopeCounter++));
                     }
                 }
 
@@ -1686,6 +1703,7 @@ window.Pattr = {
                     existingElementsByKey[String(index)].forEach(el => {
                         el._scope = loopScope;
                         this.setForTemplateRecursive(el, template);
+                        el._p_forKey = scopePrefix + index;
                         // Update key to use scoped format
                         if (el.tagName !== 'TEMPLATE') {
                             el.setAttribute('p-for-key', scopePrefix + index);
@@ -1706,6 +1724,7 @@ window.Pattr = {
                     elements.forEach(el => {
                         el._scope = loopScope;
                         this.setForTemplateRecursive(el, template);
+                        el._p_forKey = scopePrefix + index;
                         // Only set p-for-key on non-template elements at this level
                         if (el.tagName !== 'TEMPLATE') {
                             el.setAttribute('p-for-key', scopePrefix + index);
@@ -1841,6 +1860,7 @@ window.Pattr = {
                 elements.forEach(el => {
                     el._scope = loopScope;
                     this.setForTemplateRecursive(el, template);
+                    el._p_forKey = scopePrefix + index;
                     // Only set p-for-key on non-template elements
                     if (el.tagName !== 'TEMPLATE') {
                         el.setAttribute('p-for-key', scopePrefix + index);

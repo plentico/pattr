@@ -417,6 +417,8 @@ Inside an SSR-rendered `p-for`, the anchor itself must also carry the item's `p-
 <blockquote p-comp-node="quote" p-for-key="s0:1">Nice</blockquote>
 ```
 
+Client-side rendering follows the same contract: when a loop re-renders, inflated component content is stamped with the item's `p-for-key`, so markup looks identical whether it came from the backend or the browser (this is also what lets `p-model` focus restoration find inputs inside re-rendered components).
+
 ## Modifiers
 
 Modifiers extend directive functionality using colon syntax:

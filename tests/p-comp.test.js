@@ -356,6 +356,63 @@ describe('p-comp directive', () => {
       // Content is inside the wrapper, right after the anchor
       expect(items[0].querySelector('template[p-comp]').nextElementSibling.className).toBe('hero-comp');
     });
+
+    test('stamps p-for-key on inflated component content to match loop siblings', async () => {
+      const { document, Pattr } = setupPattr(buildHtml({
+        data: COMPS_DATA,
+        body: COMPS_LOOP
+      }));
+
+      await Pattr.start();
+
+      const heroKey = document.querySelector('.hero-comp').getAttribute('p-for-key');
+      const quoteKey = document.querySelector('.quote-comp').getAttribute('p-for-key');
+
+      // Same scoped format the loop stamps on regular elements: <scopeId>:<index>
+      expect(heroKey).toMatch(/^s\d+:0$/);
+      expect(quoteKey).toMatch(/^s\d+:1$/);
+      expect(heroKey.split(':')[0]).toBe(quoteKey.split(':')[0]);
+    });
+
+    test('restores focus and cursor for a p-model input inside a component after re-render', async () => {
+      // Loop over primitives with a static component whose input edits the item
+      // itself: each keystroke changes the item, so refreshLoop tears down and
+      // re-inflates the component. The stamped p-for-key lets the rAF
+      // focus-restoration lookup find the new input inside the re-inflated
+      // content (previously the walk-up found no key and focus was dropped).
+      const { window, document, Pattr } = setupPattr(buildHtml({
+        data: { items: ['hello', 'world'] },
+        body: `
+          <div id="editors">
+            <template p-for="[i, item] of items.entries()">
+              <template p-comp="'editor'"></template>
+            </template>
+          </div>
+          <template p-comp-src="editor">
+            <div class="editor-comp"><input type="text" p-model="items[i]" /></div>
+          </template>
+        `
+      }));
+
+      await Pattr.start();
+
+      const first = document.querySelectorAll('.editor-comp input')[0];
+      expect(first.value).toBe('hello');
+
+      // Place cursor at position 3 ("hel|lo") then simulate deleting one character
+      first.value = 'helo';
+      first.setSelectionRange(3, 3);
+      first.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+      // rAF is polyfilled synchronously (tests/setup.js): by now the loop has
+      // re-rendered and focus + cursor were restored to the new input
+      const restored = document.querySelectorAll('.editor-comp input')[0];
+      expect(restored.value).toBe('helo');
+      expect(restored.selectionStart).toBe(3);
+      expect(restored.selectionEnd).toBe(3);
+      expect(document.activeElement).toBe(restored);
+    });
+
   });
 
 

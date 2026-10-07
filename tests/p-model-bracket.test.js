@@ -185,7 +185,7 @@ describe('p-model bracket notation', () => {
   test('cursor position is restored in a NESTED loop (inner template scope ID stays stable)', () => {
     // Regression test: when an outer refreshLoop clones outerTemplate.content, the
     // inner <template p-for> clone loses its _forScopeId JS property (cloneNode does
-    // not copy JS properties).  Without the data-p-for-scope-id attribute fix, each
+    // not copy JS properties).  Without the p-for-scope-id attribute fix, each
     // refresh mints a NEW scope ID for the inner template, so p-for-key values change
     // on every render (e.g. "s0:1-s1:0" → "s0:1-s2:0") and the rAF querySelector
     // finds nothing → focus is dropped entirely.
@@ -249,7 +249,7 @@ describe('p-model bracket notation', () => {
     Pattr.start();
 
     // After start(), refreshAllLoops() re-renders from the outer template.
-    // With the data-p-for-scope-id fix the inner scope ID "s1" is preserved from the
+    // With the p-for-scope-id fix the inner scope ID "s1" is preserved from the
     // SSR HTML, so inner items keep p-for-key "s0:0-s1:0" etc.
     const inputs = document.querySelectorAll('input[p-model]');
     expect(inputs.length).toBe(3);
