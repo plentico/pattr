@@ -24,6 +24,7 @@ Goals:
 - [Event Handling](#event-handling)
 - [Scoped Components](#scoped-components)
 - [Loops](#loops)
+- [Dynamic Components](#dynamic-components)
 - [Modifiers](#modifiers)
 
 ## Data Sources
@@ -353,6 +354,67 @@ Pattr supports hydrating server-side rendered loops. Add `p-for-key` attributes 
 <div p-for-key="0">Apple</div>
 <div p-for-key="1">Banana</div>
 <div p-for-key="2">Orange</div>
+```
+
+## Dynamic Components
+
+`p-comp` renders a component dynamically by name. Place it on a `<template>` element, which acts as an inert anchor (just like `<template p-for>`). The expression is evaluated as JavaScript against the current scope and must resolve to a registered component name:
+
+```html
+<template p-comp="comp.name"></template>
+```
+
+This is designed for CMS-driven sites (e.g. Plenti), where the page's component list is data — often inside a loop:
+
+```html
+<template p-for="comp of comps">
+    <template p-comp="comp.name"></template>
+</template>
+```
+
+### The Registry
+
+Component markup is resolved synchronously from an in-DOM registry: inert `<template p-comp-src="name">` elements, typically emitted by the backend at the end of `<body>`. No network requests are made:
+
+```html
+<template p-comp-src="hero">
+    <section class="hero">
+        <h2 p-text="comp.fields.title"></h2>
+    </section>
+</template>
+<template p-comp-src="quote">
+    <blockquote p-text="comp.fields.text"></blockquote>
+</template>
+```
+
+### Behavior
+
+- **No wrapper element**: the component's top-level node(s) are cloned from the registry and inserted as siblings directly after the anchor, so direct-child CSS selectors (e.g. `.layout > *`) keep working. Components may have multiple top-level nodes.
+- **Live bindings**: registry markup is hydrated like any other DOM (directives, `p-on`, `p-model`, nested `p-for`/`p-comp` all work), and it stays reactive — field updates re-evaluate bindings in place without re-inflating the component.
+- **Dynamic names**: when the expression's value changes, the old component is torn down and the new one is inflated. A falsy name renders nothing.
+- **Missing names**: if no `<template p-comp-src="name">` matches, an error is logged and the anchor renders nothing (the page keeps working).
+- **`p-comp` is only supported on `<template>` elements** (a warning is logged otherwise).
+
+### SSR Support
+
+Backends can pre-render component markup for hydration. Each top-level SSR node must carry a `p-comp-node` attribute with the component name; during hydration the anchor adopts those siblings instead of re-inflating from the registry:
+
+```html
+<template p-comp="comp.name"></template>
+<section class="hero" p-comp-node="hero"><h2>Welcome</h2></section>
+```
+
+Inside an SSR-rendered `p-for`, the anchor itself must also carry the item's `p-for-key` so loop hydration can group it with its content:
+
+```html
+<template p-for="comp of comps">
+    <template p-comp="comp.name"></template>
+</template>
+<!-- SSR rendered items -->
+<template p-comp="comp.name" p-for-key="s0:0"></template>
+<section class="hero" p-comp-node="hero" p-for-key="s0:0"><h2>Welcome</h2></section>
+<template p-comp="comp.name" p-for-key="s0:1"></template>
+<blockquote p-comp-node="quote" p-for-key="s0:1">Nice</blockquote>
 ```
 
 ## Modifiers

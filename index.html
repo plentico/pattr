@@ -10,7 +10,11 @@
                 "name2": "Ted",
                 "text": "<em>some<strong>thing</strong></em>",
                 "content": {"path": "/test", "title": "My page"},
-                "count": 2
+                "count": 2,
+                "comps": [
+                    {"name": "hero", "fields": {"title": "Welcome Hero", "text": "Rendered from the registry"}},
+                    {"name": "quote", "fields": {"text": "A nice dynamic quote"}}
+                ]
             }
         </script>
     </head>
@@ -144,6 +148,29 @@
             <input placeholder="Cat name" p-model="add_cat" />
             <button p-on:click="cats = [...cats, add_cat]; add_cat = '';">Add Cat</button>
         </div>
+        <hr>
+        <div class="comps-demo">
+            <h3>Components (p-comp)</h3>
+            <template p-for="comp of comps">
+                <template p-comp="comp.name"></template>
+            </template>
+            <button id="add-hero" p-on:click="comps = [...comps, {name: 'hero', fields: {title: 'Added Hero', text: 'Added at runtime'}}]">Add Hero</button>
+            <button id="add-quote" p-on:click="comps = [...comps, {name: 'quote', fields: {text: 'Quote added at runtime'}}]">Add Quote</button>
+            <button id="remove-last" p-on:click="comps = comps.slice(0, -1)">Remove Last</button>
+        </div>
+
+        <!-- Component registry (Pico would emit these inert templates at the end of body) -->
+        <template p-comp-src="hero">
+            <section class="hero-comp">
+                <h2 p-text="comp.fields.title"></h2>
+                <p p-text="comp.fields.text"></p>
+                <button class="shout" p-on:click="comp.fields.title = comp.fields.title + '!'">Append !</button>
+                <button class="remove-me" p-on:click="comps = comps.filter(c => c !== comp)">Remove me</button>
+            </section>
+        </template>
+        <template p-comp-src="quote">
+            <blockquote class="quote-comp" p-text="comp.fields.text"></blockquote>
+        </template>
         <style>
             .cats-list {
                 overflow: hidden;

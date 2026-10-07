@@ -1322,6 +1322,110 @@ window.Pattr = {
         }
     },
 
+    // ==================== DYNAMIC COMPONENTS ====================
+
+    /**
+     * Looks up a component in the registry by name.
+     * Registry entries are inert templates emitted by the backend (e.g. Pico):
+     * <template p-comp-src="hero"> ...component markup with p-* bindings... </template>
+     */
+    findCompTemplate(name) {
+        const registry = document.querySelectorAll('template[p-comp-src]');
+        for (const tpl of registry) {
+            if (tpl.getAttribute('p-comp-src') === name) return tpl;
+        }
+        return null;
+    },
+
+    /**
+     * Handles <template p-comp="expr"> anchors (dynamic components).
+     *
+     * The template stays in the DOM as an inert anchor (same pattern as
+     * <template p-for>); the resolved component's markup is cloned from the
+     * registry and inserted as siblings right after the anchor, so no wrapper
+     * element is introduced and direct-child CSS selectors keep working.
+     *
+     * Rendered nodes are tracked in template._compData.renderedElements so
+     * removeLoopElements/findLastRenderedSibling can account for them.
+     *
+     * SSR contract: backend-rendered component markup carries a
+     * p-comp-node="name" attribute on each top-level node. During hydration the
+     * anchor adopts those siblings instead of re-inflating from the registry.
+     * (Inside p-for loops the anchor itself must carry the item's p-for-key so
+     * hydrateLoop's sibling grouping isn't interrupted.)
+     */
+    handleComp(template, parentScope, isHydrating) {
+        const evalScope = template._scope || parentScope;
+        template._scope = evalScope;
+
+        let name;
+        try {
+            name = eval(`with (evalScope) { (${template.getAttribute('p-comp')}) }`);
+        } catch (e) {
+            console.error(`Error evaluating p-comp expression: ${template.getAttribute('p-comp')}`, e);
+            return;
+        }
+        if (name !== null && name !== undefined) name = String(name);
+
+        const compData = template._compData || (template._compData = { name: null, renderedElements: [] });
+
+        // Already rendering this component and it's still in the DOM — nothing to do.
+        // (Covers repeat refresh walks as well as the empty-name steady state.)
+        if (compData.name === name && compData.renderedElements.every(el => el.isConnected)) {
+            return;
+        }
+
+        // Tear down previously rendered content (component removed or swapped)
+        if (compData.renderedElements.length > 0) {
+            this.removeLoopElements(compData.renderedElements);
+            compData.renderedElements = [];
+        }
+        compData.name = name;
+
+        if (name === null || name === undefined || name === '') {
+            return;
+        }
+
+        // SSR adoption: adopt following siblings marked p-comp-node="<name>".
+        // They are hydrated by the normal walkDom pass, so don't walk them here.
+        if (isHydrating) {
+            let sibling = template.nextElementSibling;
+            while (sibling && sibling.getAttribute('p-comp-node') === name) {
+                compData.renderedElements.push(sibling);
+                sibling = sibling.nextElementSibling;
+            }
+            if (compData.renderedElements.length > 0) {
+                return;
+            }
+        }
+
+        const src = this.findCompTemplate(name);
+        if (!src) {
+            console.error(`p-comp: no component registered under name "${name}" (expected a <template p-comp-src="${name}">)`);
+            return;
+        }
+
+        const clone = src.content.cloneNode(true);
+        const elements = Array.from(clone.children);
+
+        // If this anchor belongs to a p-for loop, mark the inflated content with the
+        // same ownership so refresh walks treat nested templates like loop clones
+        // (the parent loop rebuilds them).
+        if (template._forTemplate) {
+            elements.forEach(el => this.setForTemplateRecursive(el, template._forTemplate));
+        }
+
+        const fragment = document.createDocumentFragment();
+        elements.forEach(el => fragment.appendChild(el));
+        template.parentNode.insertBefore(fragment, template.nextSibling);
+
+        compData.renderedElements = elements;
+
+        // Hydrate the new nodes (scopes, directives, event listeners, model
+        // bindings, nested p-for/p-comp templates).
+        elements.forEach(el => this.walkDom(el, evalScope, true));
+    },
+
     /**
      * Gets the scope prefix for a template based on its nesting level
      * Checks ancestors and siblings for parent p-for templates to build hierarchical key
@@ -1598,7 +1702,7 @@ window.Pattr = {
                     // Render from template
                     const clone = template.content.cloneNode(true);
                     const elements = Array.from(clone.children);
-                    
+
                     elements.forEach(el => {
                         el._scope = loopScope;
                         this.setForTemplateRecursive(el, template);
@@ -1606,16 +1710,24 @@ window.Pattr = {
                         if (el.tagName !== 'TEMPLATE') {
                             el.setAttribute('p-for-key', scopePrefix + index);
                         }
-                        this.walkDom(el, loopScope, true);
                     });
-                    
+
                     // Insert elements after the last inserted element
                     const fragment = document.createDocumentFragment();
                     elements.forEach(el => fragment.appendChild(el));
                     lastInserted.parentNode.insertBefore(fragment, lastInserted.nextSibling);
-                    
+
                     template._forData.renderedElements.push(...elements);
-                    lastInserted = elements[elements.length - 1] || lastInserted;
+
+                    // Walk AFTER insertion so <template p-comp> anchors are connected
+                    // and can inflate their component content as siblings.
+                    elements.forEach(el => {
+                        this.walkDom(el, loopScope, true);
+                    });
+
+                    if (elements.length > 0) {
+                        lastInserted = this.findLastRenderedSibling(elements[elements.length - 1]);
+                    }
                 }
                 
                 index++;
@@ -1637,6 +1749,12 @@ window.Pattr = {
      */
     removeLoopElements(elements) {
         elements.forEach(el => {
+            // Remove any component content this p-comp anchor rendered
+            if (el._compData && el._compData.renderedElements) {
+                this.removeLoopElements(el._compData.renderedElements);
+                el._compData.renderedElements = [];
+                el._compData.name = null;
+            }
             // If this element is a template with its own rendered elements, remove those first
             if (el._forData && el._forData.renderedElements) {
                 this.removeLoopElements(el._forData.renderedElements);
@@ -1649,6 +1767,14 @@ window.Pattr = {
                     if (tpl._forData && tpl._forData.renderedElements) {
                         this.removeLoopElements(tpl._forData.renderedElements);
                         tpl._forData.renderedElements = [];
+                    }
+                });
+                const nestedCompTemplates = el.querySelectorAll('template[p-comp]');
+                nestedCompTemplates.forEach(tpl => {
+                    if (tpl._compData && tpl._compData.renderedElements) {
+                        this.removeLoopElements(tpl._compData.renderedElements);
+                        tpl._compData.renderedElements = [];
+                        tpl._compData.name = null;
                     }
                 });
             }
@@ -1750,6 +1876,11 @@ window.Pattr = {
      * Finds the last element rendered by a template (including nested template output)
      */
     findLastRenderedSibling(element) {
+        // If this is a p-comp anchor with rendered content, get its last rendered node
+        if (element.tagName === 'TEMPLATE' && element._compData && element._compData.renderedElements.length > 0) {
+            const lastRendered = element._compData.renderedElements[element._compData.renderedElements.length - 1];
+            return this.findLastRenderedSibling(lastRendered);
+        }
         // If this is a p-for template with rendered elements, get the last rendered element
         if (element.tagName === 'TEMPLATE' && element._forData && element._forData.renderedElements.length > 0) {
             const lastRendered = element._forData.renderedElements[element._forData.renderedElements.length - 1];
@@ -1838,6 +1969,23 @@ window.Pattr = {
             }
             this.handleFor(el, parentScope, isHydrating);
             return;
+        }
+
+        // Handle p-comp templates separately (dynamic components from the registry)
+        if (el.tagName === 'TEMPLATE' && el.hasAttribute('p-comp')) {
+            // Same ownership rule as nested p-for templates: during refresh the
+            // parent loop rebuilds its clones, including their p-comp anchors.
+            if (!isHydrating && el._forTemplate) {
+                return;
+            }
+            this.handleComp(el, parentScope, isHydrating);
+            return;
+        }
+
+        // p-comp on a non-template element is not supported — warn once per element
+        if (el.tagName !== 'TEMPLATE' && el.hasAttribute('p-comp') && !el._pCompWarned) {
+            el._pCompWarned = true;
+            console.warn('p-comp is only supported on <template> elements. Ignoring:', el);
         }
 
         // Evaluate p-show.pre-scope before determining scope (for Pico conditional components)
