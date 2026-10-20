@@ -27,7 +27,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:all": "npm run test && npm run test:e2e",
-    "build": "terser pattr.js -o pattr.min.js -c -m --comments '/^!/'",
+    "build": "terser pattr.js -o pattr.min.js -c --comments '/^!/'",
     "prepublishOnly": "npm run test:all && npm run build"
   },
   "repository": {

@@ -646,7 +646,7 @@ window.Pattr = {
      */
     initScope(el, parentScope) {
         const dataId = el.getAttribute('p-id') || this.generateDomPathId(el);
-        const localRawData = parentScope._p_target._p_children[dataId];
+        const localRawData = parentScope._p_target._p_children && parentScope._p_target._p_children[dataId];
         
         // Check for both p-scope and p-scope:sync on the same element
         const pScopeAttr = el.getAttribute('p-scope');
@@ -1810,7 +1810,7 @@ window.Pattr = {
 
             // Materialise the iterable so we can (a) compare with the previous render
             // and (b) iterate it without risk of exhausting a one-pass generator.
-            const items = Array.from(iterable);
+            const items = iterable == null ? [] : Array.from(iterable);
 
             // Skip re-rendering if the loop data hasn't actually changed.
             // This prevents unnecessary DOM thrashing when a parent event handler
