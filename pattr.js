@@ -1987,6 +1987,20 @@ window.Pattr = {
             if (!isHydrating && el._forTemplate) {
                 return;
             }
+            // A loop can carry a p-scope of its own: Pico puts a component's
+            // scope on its first element, which is the loop when the component
+            // is just a loop (Plenti's `{for let {name, fields} of components}`
+            // pages layout). That scope is where the loop's list comes from.
+            if (el.hasAttribute('p-scope')) {
+                let loopScope;
+                if (isHydrating && !el._scope) {
+                    loopScope = el._scope = this.initScope(el, parentScope);
+                } else {
+                    loopScope = this.refreshScope(el, parentScope);
+                }
+                this.handleFor(el, loopScope, isHydrating);
+                return;
+            }
             this.handleFor(el, parentScope, isHydrating);
             return;
         }
