@@ -188,6 +188,37 @@ describe('p-class directive', () => {
     });
   });
 
+  describe('external class merging', () => {
+    it('should preserve external classes across repeated updates without duplicating dynamic classes', async () => {
+      const { document, Pattr } = setupPattr(`<!DOCTYPE html>
+        <html>
+          <head>
+            <script id="p-root-data" type="application/json">{"isActive": false}</script>
+          </head>
+          <body>
+            <div id="test" class="static-class external-class" p-class="{'active': isActive}"></div>
+            <button id="btn" p-on:click="isActive = !isActive">Toggle</button>
+          </body>
+        </html>
+      `);
+
+      await Pattr.start();
+      const button = document.getElementById('btn');
+      const element = document.getElementById('test');
+
+      for (let i = 0; i < 20; i++) {
+        button.click();
+        expect(element.classList.contains('static-class')).toBe(true);
+        expect(element.classList.contains('external-class')).toBe(true);
+        expect(element.className.split(' ').filter(c => c === 'active').length).toBeLessThanOrEqual(1);
+      }
+
+      element.classList.add('new-external-class');
+      button.click();
+      expect(element.className).toBe('static-class external-class active new-external-class');
+    });
+  });
+
   describe('.replace modifier', () => {
     it('should replace all classes when using .replace modifier', async () => {
       const { document, Pattr } = setupPattr(`<!DOCTYPE html>

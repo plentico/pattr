@@ -279,13 +279,22 @@ window.Pattr = {
                 el._p_dynamicClasses = new Set();
             }
 
+            // Preserve classes added by other scripts while removing stale dynamic classes.
+            const currentClasses = el.className ? el.className.split(' ').filter(c => c) : [];
+            const externalClasses = currentClasses.filter(c =>
+                !el._p_staticClasses.includes(c) &&
+                !el._p_dynamicClasses.has(c) &&
+                !allPotentialDynamicClasses.has(c)
+            );
+
             // Update tracked dynamic classes
             el._p_dynamicClasses = newDynamicClasses;
 
             // Build final class list:
             // 1. Start with static classes (already excludes collisions from first run)
             // 2. Add all current dynamic classes
-            const finalClasses = [...el._p_staticClasses, ...el._p_dynamicClasses];
+            // 3. Keep classes managed outside of p-class
+            const finalClasses = [...el._p_staticClasses, ...el._p_dynamicClasses, ...externalClasses];
 
             el.className = finalClasses.join(' ');
         },
