@@ -365,12 +365,39 @@ window.Pattr = {
     async start() {
         this.root = document.documentElement;
 
-        // Load root data (props from CMS)
-        const rootDataJsonString = document.getElementById("p-root-data")?.textContent;
+        // Load root data (props from CMS). Large shared props can be externalized
+        // by the SSR renderer so they are downloaded once instead of embedded in
+        // every generated page. Fetch them before creating any reactive scopes.
+        const rootDataElement = document.getElementById("p-root-data");
+        const rootDataJsonString = rootDataElement?.textContent;
         try {
             this.rawData = JSON.parse(rootDataJsonString || '{}');
         } catch (e) {
             console.error("Error parsing root data JSON:", e);
+            this.rawData = {};
+        }
+
+        let externalProps = {};
+        try {
+            externalProps = JSON.parse(rootDataElement?.getAttribute('data-external-props') || '{}');
+        } catch (e) {
+            console.error("Error parsing external root data sources:", e);
+        }
+        const externalRequests = Object.entries(externalProps);
+        // Keep initialization synchronous for sites with no external props.
+        // Existing callers are not required to await start() in that case.
+        if (externalRequests.length > 0) {
+            await Promise.all(externalRequests.map(async ([name, url]) => {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`${response.status} ${response.statusText}`);
+                    }
+                    this.rawData[name] = await response.json();
+                } catch (e) {
+                    console.error(`Error loading external root data prop "${name}" from ${url}:`, e);
+                }
+            }));
         }
 
         this.buildScopeData(this.root, this.rawData);
