@@ -379,7 +379,7 @@ window.Pattr = {
 
         let externalProps = {};
         try {
-            externalProps = JSON.parse(rootDataElement?.getAttribute('data-external-props') || '{}');
+            externalProps = JSON.parse(rootDataElement?.getAttribute('p-external-props') || '{}');
         } catch (e) {
             console.error("Error parsing external root data sources:", e);
         }

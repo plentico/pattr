@@ -7,7 +7,7 @@ describe('external root data', () => {
       <html>
         <head>
           <script id="p-root-data" type="application/json"
-            data-external-props='{"allContent":"/core/allContent.json"}'>{"content":{"fields":{"title":"Blog"}}}</script>
+            p-external-props='{"allContent":"/core/allContent.json"}'>{"content":{"fields":{"title":"Blog"}}}</script>
         </head>
         <body>
           <h1 p-text="content.fields.title"></h1>
@@ -32,7 +32,7 @@ describe('external root data', () => {
   it('continues hydrating inline props when external data cannot be loaded', async () => {
     const { window, document, Pattr } = setupPattr(`<!DOCTYPE html>
       <html><head><script id="p-root-data" type="application/json"
-        data-external-props='{"allContent":"/missing.json"}'>{"title":"Still here"}</script></head>
+        p-external-props='{"allContent":"/missing.json"}'>{"title":"Still here"}</script></head>
         <body><p p-text="title"></p></body></html>
     `);
     window.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });

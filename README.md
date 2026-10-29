@@ -20,6 +20,8 @@ Goals:
 ## Table of Contents
 
 - [Data Sources](#data-sources)
+  - [Root Data (Props from CMS)](#root-data-props-from-cms)
+  - [Shared External Props](#shared-external-props)
 - [Directives](#directives)
 - [Event Handling](#event-handling)
 - [Scoped Components](#scoped-components)
@@ -41,7 +43,47 @@ Pattr reads data from JSON script tags in your HTML:
 </script>
 ```
 
-Both data sources are merged and available throughout your app.
+Root props are available throughout your app.
+
+### Shared External Props
+
+Use `p-external-props` on `#p-root-data` when several pages need the same data. The attribute maps root prop names to JSON resources, so large collections do not need to be repeated inside every page:
+
+```html
+<script
+    id="p-root-data"
+    type="application/json"
+    p-external-props='{"allContent":"/core/allContent.json"}'
+>
+{
+    "title": "Welcome",
+    "count": 5
+}
+</script>
+```
+
+Serve `/core/allContent.json` as an object containing the named props (not as a bare array):
+
+```json
+{
+    "allContent": [
+        { "path": "/", "fields": { "title": "Home" } },
+        { "path": "/about", "fields": { "title": "About" } }
+    ]
+}
+```
+
+Pattr fetches each distinct URL once per page load, then waits for all resources before initializing component scopes and directives. The fetched members are merged with the inline root props, so `allContent` can be used normally:
+
+```html
+<div p-scope="latest = allContent.filter(item => item.path !== '/').slice(0, 3)">
+    <div p-for="item in latest" p-text="item.fields.title"></div>
+</div>
+```
+
+If a resource contains the same key as an inline prop, the external value takes precedence. Root data remains usable if a fetch or JSON parse fails; that failure is logged as an error, and hydration continues with the available props. Your server must serve these resources with the appropriate CORS headers when using cross-origin URLs.
+
+Pico can generate the external-props attribute automatically with [`pico.NewExternalProp`](https://github.com/plentico/pico#external-root-props). No external-props attribute means no startup fetches or added startup delay.
 
 ## Directives
 
