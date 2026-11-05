@@ -6,6 +6,7 @@ const REGISTRY = `
   <template p-comp-src="hero">
     <section class="hero-comp">
       <h2 p-text="comp.fields.title"></h2>
+      <input class="title-input" p-model="comp.fields.title">
       <button class="shout" p-on:click="comp.fields.title = comp.fields.title + '!'">Append !</button>
       <button class="remove-me" p-on:click="comps = comps.filter(c => c !== comp)">Remove me</button>
     </section>
@@ -287,6 +288,61 @@ describe('p-comp directive', () => {
       expect(heroAfter).toBe(heroBefore);
     });
 
+    test('retains focused component inputs during CMS data updates', async () => {
+      const { document, Pattr } = setupPattr(buildHtml({
+        data: COMPS_DATA,
+        body: COMPS_LOOP
+      }));
+
+      await Pattr.start();
+      const input = document.querySelector('.title-input');
+      input.focus();
+
+      const firstUpdate = JSON.parse(JSON.stringify(Pattr.data.comps));
+      firstUpdate[0].fields.title = 'H';
+      Pattr.data.comps = firstUpdate;
+      Pattr.walkDom(Pattr.root, Pattr.data, false);
+      expect(document.activeElement.classList.contains('title-input')).toBe(true);
+      expect(document.querySelector('.hero-comp h2').innerText).toBe('H');
+
+      document.activeElement.value = 'He';
+      const secondUpdate = JSON.parse(JSON.stringify(Pattr.data.comps));
+      secondUpdate[0].fields.title = document.activeElement.value;
+      Pattr.data.comps = secondUpdate;
+      Pattr.walkDom(Pattr.root, Pattr.data, false);
+
+      expect(document.activeElement.classList.contains('title-input')).toBe(true);
+      expect(document.querySelector('.hero-comp h2').innerText).toBe('He');
+      expect(document.querySelector('.title-input').value).toBe('He');
+    });
+
+    test('keeps accepting input after the first keystroke', async () => {
+      const { document, Pattr } = setupPattr(buildHtml({
+        data: COMPS_DATA,
+        body: COMPS_LOOP
+      }));
+
+      await Pattr.start();
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const type = async value => {
+        const input = document.activeElement?.classList.contains('title-input')
+          ? document.activeElement
+          : document.querySelector('.title-input');
+        input.focus();
+        input.value = value;
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await frame();
+      };
+
+      await type('H');
+      expect(document.activeElement.classList.contains('title-input')).toBe(true);
+      await type('He');
+
+      expect(Pattr.data.comps[0].fields.title).toBe('He');
+      expect(document.querySelector('.hero-comp h2').innerText).toBe('He');
+      expect(document.querySelector('.title-input').value).toBe('He');
+    });
+
     test('does not duplicate components on unrelated state changes', async () => {
       const { document, Pattr } = setupPattr(buildHtml({
         data: { ...COMPS_DATA, count: 0 },
@@ -447,9 +503,9 @@ describe('p-comp directive', () => {
               <template p-comp="comp.name"></template>
             </template>
             <template p-comp="comp.name" p-for-key="s3:0"></template>
-            <section class="hero-comp" p-comp-node="hero" p-for-key="s3:0"><h2>SSR Hero</h2></section>
+            <section class="hero-comp" p-comp-node="hero" p-for-key="s3:0"><h2 p-text="comp.fields.title">SSR Hero</h2></section>
             <template p-comp="comp.name" p-for-key="s3:1"></template>
-            <blockquote class="quote-comp" p-comp-node="quote" p-for-key="s3:1">SSR quote</blockquote>
+            <blockquote class="quote-comp" p-comp-node="quote" p-for-key="s3:1" p-text="comp.fields.text">SSR quote</blockquote>
           </div>
         `
       }));

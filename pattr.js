@@ -1443,6 +1443,7 @@ window.Pattr = {
 
         const clone = src.content.cloneNode(true);
         const elements = Array.from(clone.children);
+        elements.forEach(el => { el._pCompRoot = true; });
 
         // If this anchor belongs to a p-for loop, mark the inflated content with the
         // same ownership so refresh walks treat nested templates like loop clones
@@ -1675,6 +1676,7 @@ window.Pattr = {
         
         try {
             const iterable = eval(`with (parentScope) { (${iterableExpr}) }`);
+            const items = iterable == null ? [] : Array.from(iterable);
             
             // Get the scope prefix for this template's keys
             const scopePrefix = this.getTemplateScopePrefix(template);
@@ -1731,7 +1733,7 @@ window.Pattr = {
             let index = 0;
             let lastInserted = template;
             
-            for (const item of iterable) {
+            for (const item of items) {
                 const loopScope = this.createLoopScope(parentScope, varPattern, item);
                 
                 if (existingElementsByKey[String(index)]) {
@@ -1854,6 +1856,7 @@ window.Pattr = {
             // unchanged.  Array items (e.g. Object.entries pairs) are compared
             // element-by-element; primitives and object references use strict equality.
             const prevItems = forData._prevItems;
+            const scopePrefix = forData.scopePrefix || this.getTemplateScopePrefix(template);
             if (prevItems && prevItems.length === items.length) {
                 let changed = false;
                 for (let i = 0; i < items.length && !changed; i++) {
@@ -1875,9 +1878,20 @@ window.Pattr = {
             }
             forData._prevItems = items;
 
-            // Use stored scope prefix or regenerate if needed
-            const scopePrefix = forData.scopePrefix || this.getTemplateScopePrefix(template);
-            
+            // A CMS JSON update replaces the whole array, so ordinary reference
+            // checks cannot avoid rebuilding its loop DOM. Capture the edited
+            // control first and restore it synchronously after rendering.
+            const active = document.activeElement;
+            const activeKey = active?.closest?.('[p-for-key]')?.getAttribute('p-for-key');
+            const focusState = activeKey && forData.renderedElements.some(el => el._p_forKey === activeKey || el._compData?.renderedElements?.some(node => node._p_forKey === activeKey)) ? {
+                key: activeKey,
+                model: active.getAttribute('p-model'),
+                id: active.id,
+                tag: active.tagName.toLowerCase(),
+                start: active.selectionStart,
+                end: active.selectionEnd
+            } : null;
+
             // Remove all elements (including nested loop elements) and re-render
             this.removeLoopElements(forData.renderedElements);
             forData.renderedElements = [];
@@ -1922,6 +1936,18 @@ window.Pattr = {
                 }
                 
                 index++;
+            }
+            if (focusState) {
+                const candidates = Array.from(document.querySelectorAll(`${focusState.tag}[p-model]`))
+                    .filter(el => el.closest('[p-for-key]')?.getAttribute('p-for-key') === focusState.key
+                        && (!focusState.model || el.getAttribute('p-model') === focusState.model));
+                const replacement = (focusState.id && candidates.find(el => el.id === focusState.id)) || candidates[0];
+                if (replacement) {
+                    replacement.focus();
+                    if (focusState.start != null && focusState.end != null) {
+                        try { replacement.setSelectionRange(focusState.start, focusState.end); } catch (_) { /* unsupported input type */ }
+                    }
+                }
             }
         } catch (e) {
             console.error(`Error in p-for refresh: ${iterableExpr}`, e);
@@ -2008,6 +2034,12 @@ window.Pattr = {
      * Walks the DOM tree, processing scopes, event handlers, and directives
      */
     walkDom(el, parentScope, isHydrating = false) {
+        // Loop roots are refreshed by their owning p-for template. Walking
+        // them again from the document root would evaluate item directives in
+        // the outer scope, where the loop variable is undefined.
+        if (!isHydrating && el._forTemplate && el._p_forKey != null && !el._pCompRoot && !el.hasAttribute('p-comp-node')) {
+            return;
+        }
         // Skip elements already fully hydrated by hydrateLoop during this hydration pass.
         // This prevents the parent walkDom from re-evaluating inner SSR elements with the
         // wrong (outer-loop) scope when those elements live inside an outer SSR element.

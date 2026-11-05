@@ -2,6 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { setupPattr } from './setup.js';
 
 describe('p-for SSR hydration', () => {
+  it('refreshes hydrated loop directives only with their loop scope', async () => {
+    const { document, Pattr } = setupPattr(`<!DOCTYPE html>
+      <html><head><script id="p-root-data" type="application/json">
+        {"items":[{"title":"a"},{"title":"b"}]}
+      </script></head><body>
+        <template p-for="item in items"><div p-text="item.title"></div></template>
+        <div p-for-key="s1:0" p-text="item.title">a</div>
+        <div p-for-key="s1:1" p-text="item.title">b</div>
+      </body></html>`);
+    await Pattr.start();
+    expect(() => { Pattr.data = { ...Pattr.data }; }).not.toThrow();
+    expect(Array.from(document.querySelectorAll('div[p-for-key]')).map(el => el.innerText)).toEqual(['a', 'b']);
+  });
+
   describe('Scope ID Reuse', () => {
     it('should reuse SSR scope IDs instead of generating new ones', async () => {
       const { document, Pattr } = setupPattr(`<!DOCTYPE html>
