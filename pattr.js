@@ -223,15 +223,16 @@ window.Pattr = {
             const shouldReplace = modifiers.replace !== undefined;
 
             if (shouldReplace) {
-                // Replace mode: p-class.replace completely controls the className
+                // The class attribute works for both HTML and SVG elements. SVG's
+                // className property is an SVGAnimatedString, not a plain string.
                 if (typeof value === 'string') {
-                    el.className = value;
+                    el.setAttribute('class', value);
                 } else if (Array.isArray(value)) {
-                    el.className = value.join(' ');
+                    el.setAttribute('class', value.join(' '));
                 } else if (typeof value === 'object' && value !== null) {
-                    el.className = Object.keys(value)
+                    el.setAttribute('class', Object.keys(value)
                         .filter(key => value[key])
-                        .join(' ');
+                        .join(' '));
                 }
                 return;
             }
@@ -269,7 +270,7 @@ window.Pattr = {
             // Initialize static classes tracking on first run
             // IMPORTANT: Exclude any classes that are potential dynamic classes (collisions)
             if (!el._p_staticClasses) {
-                const currentClasses = el.className ? el.className.split(' ').filter(c => c) : [];
+                const currentClasses = (el.getAttribute('class') || '').split(' ').filter(c => c);
                 // Exclude ALL potential dynamic class names (not just currently active ones)
                 // This ensures that for object format like {collapsed: false}, 'collapsed'
                 // is still excluded from static classes even though it's not currently active
@@ -280,7 +281,7 @@ window.Pattr = {
             }
 
             // Preserve classes added by other scripts while removing stale dynamic classes.
-            const currentClasses = el.className ? el.className.split(' ').filter(c => c) : [];
+            const currentClasses = (el.getAttribute('class') || '').split(' ').filter(c => c);
             const externalClasses = currentClasses.filter(c =>
                 !el._p_staticClasses.includes(c) &&
                 !el._p_dynamicClasses.has(c) &&
@@ -296,7 +297,7 @@ window.Pattr = {
             // 3. Keep classes managed outside of p-class
             const finalClasses = [...el._p_staticClasses, ...el._p_dynamicClasses, ...externalClasses];
 
-            el.className = finalClasses.join(' ');
+            el.setAttribute('class', finalClasses.join(' '));
         },
         'p-model': (el, value) => {
             if (el.type === 'checkbox') {

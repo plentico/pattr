@@ -77,6 +77,42 @@ describe('p-class directive', () => {
     expect(document.getElementById('test').className).toContain('active');
   });
 
+  it('should apply classes to SVG elements with animated className properties', async () => {
+    const { document, Pattr } = setupPattr(`<!DOCTYPE html>
+      <html>
+        <head>
+          <script id="p-root-data" type="application/json">{"isActive": true}</script>
+        </head>
+        <body>
+          <svg><g id="test" class="icon p-xIdmCU" p-class="{'active': isActive}"></g></svg>
+        </body>
+      </html>
+    `);
+
+    const element = document.getElementById('test');
+    expect(element.className.split).toBeUndefined();
+    await Pattr.start();
+
+    expect(element.getAttribute('class')).toBe('icon p-xIdmCU active');
+  });
+
+  it('should replace classes on SVG elements', async () => {
+    const { document, Pattr } = setupPattr(`<!DOCTYPE html>
+      <html>
+        <head>
+          <script id="p-root-data" type="application/json">{"themeClass": "dark-theme"}</script>
+        </head>
+        <body>
+          <svg><g id="test" class="old-class" p-class:replace="themeClass"></g></svg>
+        </body>
+      </html>
+    `);
+
+    await Pattr.start();
+
+    expect(document.getElementById('test').getAttribute('class')).toBe('dark-theme');
+  });
+
   describe('merging behavior', () => {
     it('should preserve static classes', async () => {
       const { document, Pattr } = setupPattr(`<!DOCTYPE html>
